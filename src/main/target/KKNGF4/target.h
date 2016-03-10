@@ -16,7 +16,7 @@
  */
 
 #pragma once
-#define TARGET_BOARD_IDENTIFIER "REVO"
+#define TARGET_BOARD_IDENTIFIER "KKNGF4"
 #define CONFIG_START_FLASH_ADDRESS (0x08080000) //0x08080000 to 0x080A0000 (FLASH_Sector_8)
 #define CONFIG_SERIALRX_PROVIDER SERIALRX_SBUS
 #define CONFIG_BLACKBOX_DEVICE BLACKBOX_DEVICE_FLASH
@@ -25,14 +25,13 @@
 #define CONFIG_MSP_PORT 2
 #define CONFIG_RX_SERIAL_PORT 1
 
-#define USBD_PRODUCT_STRING "Revolution"
-#ifdef OPBL
-	#define USBD_SERIALNUMBER_STRING "0x8020000"
-#endif
+#define USBD_PRODUCT_STRING "KopterKontrolNG"
 
 #define LED0 PB5
 #define LED1 PB4
-#define BEEPER PB4
+#define BEEPER PB14
+#define BEEPER_INVERTED
+
 #define INVERTER PC0 // PC0 used as inverter select GPIO
 #define INVERTER_USART USART1
 
@@ -53,19 +52,8 @@
 #define MPU_INT_EXTI PC4
 #define USE_EXTI
 
-#define MAG
-#define USE_MAG_HMC5883
-#define MAG_HMC5883_ALIGN CW90_DEG
-
-//#define USE_MAG_NAZA
-//#define MAG_NAZA_ALIGN CW180_DEG_FLIP
-
 #define BARO
 #define USE_BARO_MS5611
-
-//#define PITOT
-//#define USE_PITOT_MS4525
-//#define MS4525_BUS I2C_DEVICE_EXT
 
 #define M25P16_CS_PIN         PB3
 #define M25P16_SPI_INSTANCE   SPI3
@@ -77,6 +65,7 @@
 
 #define USE_VCP
 #define VBUS_SENSING_PIN PC5
+#define VBUS_SENSING_ENABLED
 
 #define USE_USART1
 #define USART1_RX_PIN PA10
@@ -93,12 +82,6 @@
 
 #define SERIAL_PORT_COUNT 4 //VCP, USART1, USART3, USART6
 
-#define USE_SERIAL_1WIRE
-#define S1W_TX_GPIO         GPIOB
-#define S1W_TX_PIN          GPIO_Pin_10
-#define S1W_RX_GPIO         GPIOB
-#define S1W_RX_PIN          GPIO_Pin_11
-
 #define USE_SPI
 
 #define USE_SPI_DEVICE_1
@@ -110,22 +93,27 @@
 #define SPI3_MOSI_PIN           PC12
 
 #define USE_I2C
-#define I2C_DEVICE (I2CDEV_1)
+#define I2C_DEVICE (I2CDEV_1)  // PB6-SCL, PB7-SDA
+#define USE_I2C_PULLUP
+#define I2C1_SCL             PB6
+#define I2C1_SDA             PB7
 
 #define USE_ADC
-#define CURRENT_METER_ADC_PIN       PC1
-#define CURRENT_METER_ADC_CHANNEL   ADC_Channel_11
+#define BOARD_HAS_VOLTAGE_DIVIDER
 
-#define VBAT_ADC_PIN           PC2
-#define VBAT_ADC_CHANNEL       ADC_Channel_12
+#define VBAT_ADC_PIN           PC1
+#define VBAT_ADC_CHANNEL       ADC_Channel_11
 
-#define RSSI_ADC_GPIO_PIN      PA0
-#define RSSI_ADC_CHANNEL       ADC_Channel_0
+#define RSSI_ADC_GPIO_PIN      PC2
+#define RSSI_ADC_CHANNEL       ADC_Channel_12
 
-#define SENSORS_SET (SENSOR_ACC)
+#define CURRENT_METER_ADC_PIN       PC3
+#define CURRENT_METER_ADC_CHANNEL   ADC_Channel_13
 
-#define LED_STRIP
-#define LED_STRIP_TIMER TIM5
+//#define SENSORS_SET (SENSOR_ACC)
+
+//#define LED_STRIP
+//#define LED_STRIP_TIMER TIM5
 
 #define SOFTSERIAL
 #define GPS
@@ -134,7 +122,23 @@
 #define SERIAL_RX
 #define GTUNE
 #define USE_SERVOS
+#define USE_QUAD_MIXER_ONLY
 #define USE_CLI
+
+#define SPEKTRUM_BIND
+// USART2, PA3
+#define BIND_PORT            GPIOb
+#define BIND_PIN             Pin_11
+
+//#define USE_ESCSERIAL
+//#define ESCSERIAL_TIMER_TX_HARDWARE 0
+
+#define USE_SERIAL_1WIRE
+#define ESC_COUNT 4
+#define S1W_TX_GPIO         GPIOB
+#define S1W_TX_PIN          GPIO_Pin_10
+#define S1W_RX_GPIO         GPIOB
+#define S1W_RX_PIN          GPIO_Pin_11
 
 #define USE_QUATERNION
 
