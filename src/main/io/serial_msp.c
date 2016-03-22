@@ -1399,11 +1399,7 @@ static bool processInCommand(void)
                 masterConfig.profile[0].rcControlsConfig.yaw_deadband = read8();
                 currentProfile->pidProfile.gyro_lpf_hz = read8();
     			currentProfile->pidProfile.dterm_lpf_hz = read8();
-<<<<<<< HEAD
-//    			currentProfile->pidProfile.yaw_pterm_cut_hz = read8();
-=======
     			//currentProfile->pidProfile.yaw_pterm_cut_hz = read8();
->>>>>>> upstream/rs2k/rel_1.0_rc8
             }
         } else {
             headSerialError(0);
