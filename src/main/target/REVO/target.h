@@ -32,9 +32,11 @@
 
 #define LED0 PB5
 #define LED1 PB4
-#define BEEPER PB4
 #define INVERTER PC0 // PC0 used as inverter select GPIO
 #define INVERTER_USART USART1
+
+#define BEEPER PA0
+#define BEEPER_INVERTED
 
 #define MPU6000_CS_PIN        PA4
 #define MPU6000_SPI_INSTANCE  SPI1
