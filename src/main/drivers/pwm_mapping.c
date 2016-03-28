@@ -1252,7 +1252,7 @@ if (init->useBuzzerP6) {
 #endif
 //#ifdef KKNGF4
 //            if (init->useMultiShot || init->useOneshot || isMotorBrushed(init->motorPwmRate)) {
-//                ppmAvoidPWMTimerClash(timerHardwarePtr, TIM4);
+//                ppmAvoidPWMTimerClash(timerHardwarePtr, TIM8);
 //            }
 //#endif
             ppmInConfig(timerHardwarePtr);
