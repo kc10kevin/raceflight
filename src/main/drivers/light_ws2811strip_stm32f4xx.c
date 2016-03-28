@@ -24,7 +24,7 @@
 #include "drivers/light_ws2811strip.h"
 #include "nvic.h"
 
-#if defined(REVO) || defined(REVONANO) || defined(SPARKY2) || defined(ALIENFLIGHTF4) || defined(VRCORE)
+#if defined(REVO) || defined(REVONANO) || defined(SPARKY2) || defined(ALIENFLIGHTF4) || defined(VRCORE) || defined(KKNGF4)
 void ws2811LedStripHardwareInit(void)
 {
     TIM_TimeBaseInitTypeDef  TIM_TimeBaseStructure;

@@ -1250,11 +1250,11 @@ if (init->useBuzzerP6) {
                 ppmAvoidPWMTimerClash(timerHardwarePtr, TIM2);
             }
 #endif
-//#ifdef KKNGF4
-//            if (init->useMultiShot || init->useOneshot || isMotorBrushed(init->motorPwmRate)) {
-//                ppmAvoidPWMTimerClash(timerHardwarePtr, TIM4);
-//            }
-//#endif
+#ifdef KKNGF4
+            if (init->useMultiShot || init->useOneshot || isMotorBrushed(init->motorPwmRate)) {
+                ppmAvoidPWMTimerClash(timerHardwarePtr, TIM8);
+            }
+#endif
             ppmInConfig(timerHardwarePtr);
         } else if (type == MAP_TO_PWM_INPUT) {
             pwmInConfig(timerHardwarePtr, channelIndex);
