@@ -84,7 +84,7 @@
 #define M25P16_CS_PIN         PB3
 #define M25P16_SPI_INSTANCE   SPI3
 
-#define USABLE_TIMER_CHANNEL_COUNT 5
+#define USABLE_TIMER_CHANNEL_COUNT 5  //  chane to 6
 
 #define USE_VCP
 #define VBUS_SENSING_PIN PC5
