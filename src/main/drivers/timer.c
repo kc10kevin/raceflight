@@ -460,9 +460,9 @@ const timerHardware_t timerHardware[USABLE_TIMER_CHANNEL_COUNT] = {
 
 };
 
-#define USED_TIMERS  ( TIM_N(2) | TIM_N(3) | TIM_N(5) | TIM_N(8) | TIM_N(9))
+#define USED_TIMERS  ( TIM_N(2) | TIM_N(3) | TIM_N(8) | TIM_N(9))
 
-#define TIMER_APB1_PERIPHERALS (RCC_APB1Periph_TIM2 | RCC_APB1Periph_TIM3 | RCC_APB1Periph_TIM5 | RCC_AHB1Periph_GPIOA | RCC_AHB1Periph_GPIOB)
+#define TIMER_APB1_PERIPHERALS (RCC_APB1Periph_TIM2 | RCC_APB1Periph_TIM3 | RCC_AHB1Periph_GPIOA | RCC_AHB1Periph_GPIOB)
 #define TIMER_APB2_PERIPHERALS (RCC_APB2Periph_TIM8 | RCC_APB2Periph_TIM9)
 
 #endif
