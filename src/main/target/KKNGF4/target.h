@@ -48,6 +48,7 @@
 
 // MPU6000 interrupts
 #define USE_MPU_DATA_READY_SIGNAL
+//#define ENSURE_MPU_DATA_READY_IS_LOW
 #define EXTI_CALLBACK_HANDLER_COUNT 1 // MPU data ready (mag disabled)
 #define MPU_INT_EXTI PC4
 #define USE_EXTI
@@ -145,11 +146,11 @@
 #define LED_STRIP_TIMER TIM5
 
 //#define SOFTSERIAL
-#define GPS
+//#define GPS
 #define BLACKBOX
-#define TELEMETRY
+//#define TELEMETRY
 #define SERIAL_RX
-#define GTUNE
+#define AUTOTUNE
 //#define USE_SERVOS
 #define USE_QUAD_MIXER_ONLY
 #define USE_CLI
@@ -159,8 +160,8 @@
 #define BIND_PORT            GPIOB
 #define BIND_PIN             Pin_11
 
-//#define USE_ESCSERIAL
-//#define ESCSERIAL_TIMER_TX_HARDWARE 0
+#define USE_ESCSERIAL
+#define ESCSERIAL_TIMER_TX_HARDWARE 0
 
 #define USE_SERIAL_1WIRE
 #define ESC_COUNT 4
