@@ -1317,11 +1317,11 @@ if (init->useBuzzerP6) {
                 ppmAvoidPWMTimerClash(timerHardwarePtr, TIM1, init);
             }
 #endif
-#ifdef KKNGF4
-            if (init->useMultiShot || init->useOneshot || isMotorBrushed(init->motorPwmRate)) {
-                ppmAvoidPWMTimerClash(timerHardwarePtr, TIM8, init);
-            }
-#endif
+//#ifdef KKNGF4
+//            if (init->useMultiShot || init->useOneshot || isMotorBrushed(init->motorPwmRate)) {
+//                ppmAvoidPWMTimerClash(timerHardwarePtr, TIM8, init);
+//            }
+//#endif
 #ifdef AQ32_V2
             if (init->useMultiShot || init->useOneshot || isMotorBrushed(init->motorPwmRate)) {
                 ppmAvoidPWMTimerClash(timerHardwarePtr, TIM4, init);
