@@ -159,8 +159,8 @@
 #define BIND_PORT            GPIOB
 #define BIND_PIN             Pin_11
 
-//#define USE_ESCSERIAL
-//#define ESCSERIAL_TIMER_TX_HARDWARE 0
+#define USE_ESCSERIAL
+#define ESCSERIAL_TIMER_TX_HARDWARE 0
 
 #define USE_SERIAL_1WIRE
 #define ESC_COUNT 4
