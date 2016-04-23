@@ -164,17 +164,22 @@ static void resetAccelerometerTrims(flightDynamicsTrims_t *accelerometerTrims)
 
 void resetPidProfile(pidProfile_t *pidProfile)
 {
-    pidProfile->pidController = 2; //default is LUX
 
-    pidProfile->P8[ROLL] = 42;
-    pidProfile->I8[ROLL] = 40;
-    pidProfile->D8[ROLL] = 13;
-    pidProfile->P8[PITCH] = 54;
-    pidProfile->I8[PITCH] = 40;
-    pidProfile->D8[PITCH] = 18;
-    pidProfile->P8[YAW] = 100;
-    pidProfile->I8[YAW] = 50;
-    pidProfile->D8[YAW] = 5;
+#if defined(STM32F411xE) || defined(STM32F40_41xxx)
+    pidProfile->pidController = 2; //default is LUX
+#else
+    pidProfile->pidController = 1; //default is MWRW
+#endif
+
+    pidProfile->P8[ROLL] = 55;
+    pidProfile->I8[ROLL] = 80;
+    pidProfile->D8[ROLL] = 18;
+    pidProfile->P8[PITCH] = 65;
+    pidProfile->I8[PITCH] = 100;
+    pidProfile->D8[PITCH] = 22;
+    pidProfile->P8[YAW] = 110;
+    pidProfile->I8[YAW] = 180;
+    pidProfile->D8[YAW] = 0;
     pidProfile->P8[PIDALT] = 50;
     pidProfile->I8[PIDALT] = 0;
     pidProfile->D8[PIDALT] = 0;
@@ -196,8 +201,6 @@ void resetPidProfile(pidProfile_t *pidProfile)
     pidProfile->D8[PIDVEL] = 1;
 
     pidProfile->gyro_lpf_hz = 70;    // filtering ON by default
-
-#if defined(STM32F411xE) || defined(STM32F40_41xxx)
     pidProfile->dterm_lpf_hz = 70;   // filtering ON by default
     pidProfile->yaw_pterm_cut_hz = 30;
     pidProfile->P_f[ROLL] = 5.000f;     // new PID for raceflight. test carefully
@@ -212,22 +215,7 @@ void resetPidProfile(pidProfile_t *pidProfile)
     pidProfile->A_level = 3.000f;
     pidProfile->H_level = 3.000f;
     pidProfile->H_sensitivity = 100;
-#else
-    pidProfile->dterm_lpf_hz = 40;   // filtering ON by default
-    pidProfile->yaw_pterm_cut_hz = 30;
-    pidProfile->P_f[ROLL] = 1.1f;     // new PID with preliminary defaults test carefully
-    pidProfile->I_f[ROLL] = 0.4f;
-    pidProfile->D_f[ROLL] = 0.01f;
-    pidProfile->P_f[PITCH] = 1.5f;
-    pidProfile->I_f[PITCH] = 0.4f;
-    pidProfile->D_f[PITCH] = 0.01f;
-    pidProfile->P_f[YAW] = 4.0f;
-    pidProfile->I_f[YAW] = 0.4f;
-    pidProfile->D_f[YAW] = 0.00f;
-    pidProfile->A_level = 3.000f;
-    pidProfile->H_level = 3.000f;
-    pidProfile->H_sensitivity = 100;
-#endif
+
 
 #ifdef GTUNE
     pidProfile->gtune_lolimP[ROLL] = 10;          // [0..200] Lower limit of ROLL P during G tune.
@@ -430,9 +418,6 @@ static void resetConf(void)
     masterConfig.version = EEPROM_CONF_VERSION;
     masterConfig.mixerMode = MIXER_QUADX;
     featureClearAll();
-#if defined(CJMCU) || defined(SPARKY) || defined(COLIBRI_RACE) || defined(MOTOLAB)
-    featureSet(FEATURE_RX_PPM);
-#endif
 
 #ifdef BOARD_HAS_VOLTAGE_DIVIDER
     // only enable the VBAT feature by default if the board has a voltage divider otherwise
@@ -460,7 +445,7 @@ static void resetConf(void)
     masterConfig.acc_hardware = ACC_DEFAULT;     // default/autodetect
     masterConfig.max_angle_inclination = 700;    // 70 degrees
     masterConfig.yaw_control_direction = 1;
-    masterConfig.gyroConfig.gyroMovementCalibrationThreshold = 32;
+    masterConfig.gyroConfig.gyroMovementCalibrationThreshold = 16;
 
     // xxx_hardware: 0:default/autodetect, 1: disable
     masterConfig.mag_hardware = 1;
@@ -480,8 +465,8 @@ static void resetConf(void)
 #endif
 	masterConfig.rf_loop_ctrl = 2;                 // High DLPF, H4
 
-#if defined(CC3D)
-    masterConfig.acc_hardware = 0;     // default/autodetect
+#if defined(CC3D) || defined(MOTOLAB) || defined(LUX_RACE)
+    masterConfig.acc_hardware = 1;     // default/autodetect
 #endif
         
 #if defined(STM32F40_41xxx) || defined (STM32F411xE)
