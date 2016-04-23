@@ -833,9 +833,7 @@ LUX_RACE_SRC = \
 		   $(STM32F30x_COMMON_SRC) \
 		   drivers/display_ug2864hsweg01.c \
 		   drivers/accgyro_mpu.c \
-		   drivers/accgyro_mpu6500.c \
-		   drivers/accgyro_spi_mpu6500.c \
-		   drivers/accgyro_mpu6500.c \
+		   drivers/accgyro_spi_mpu9250.c \
 		   drivers/barometer_ms5611.c \
 		   drivers/compass_ak8975.c \
 		   drivers/compass_hmc5883l.c \
@@ -962,7 +960,7 @@ OPTIMIZE	 = -O0
 LTO_FLAGS	 = $(OPTIMIZE)
 else
 ifeq ($(TARGET),$(filter $(TARGET),SPARKY2 SPARKY2_OPBL))
-OPTIMIZE	 = -O0
+OPTIMIZE	 = -O2
 else ifeq ($(TARGET),$(filter $(TARGET),REVO REVO_OPBL REVONANO REVONANO_OPBL ALIENFLIGHTF4 BLUEJAYF4 VRCORE KKNGF4))
 OPTIMIZE	 = -O2
 else
