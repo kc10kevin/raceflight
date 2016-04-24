@@ -29,8 +29,8 @@
 
 #define LED0 PB5
 #define LED1 PB4
-#define BEEPER PA8
-#define BEEPER_INVERTED
+#define BEEPER PB14
+//#define BEEPER_INVERTED
 
 #define INVERTER PC0 // PC0 used as inverter select GPIO
 #define INVERTER_USART USART1
@@ -109,12 +109,6 @@
 #define USE_SPI
 
 #define USE_SPI_DEVICE_1
-
-#define USE_SPI_DEVICE_2
-#define SPI2_NSS_PIN            PB12
-#define SPI2_SCK_PIN            PB13
-#define SPI2_MISO_PIN           PB14
-#define SPI2_MOSI_PIN           PB15
 
 #define USE_SPI_DEVICE_3
 #define SPI3_NSS_PIN            PB3
