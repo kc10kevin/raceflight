@@ -19,7 +19,7 @@
 #define TARGET_BOARD_IDENTIFIER "REVO"
 #define CONFIG_START_FLASH_ADDRESS (0x08080000) //0x08080000 to 0x080A0000 (FLASH_Sector_8)
 #define CONFIG_SERIALRX_PROVIDER SERIALRX_SBUS
-#define CONFIG_BLACKBOX_DEVICE BLACKBOX_DEVICE_SDCARD
+#define CONFIG_BLACKBOX_DEVICE BLACKBOX_DEVICE_FLASH
 #define CONFIG_FEATURE_RX_SERIAL
 #define CONFIG_FEATURE_ONESHOT125
 #define CONFIG_MSP_PORT 2
@@ -57,33 +57,10 @@
 #define USE_BARO_MS5611
 #define MS5611_I2C_INSTANCE I2CDEV_1
 
-#define USE_SDCARD
-
-#define SDCARD_DETECT_INVERTED
-
-#define SDCARD_DETECT_PIN                   PD2
-#define SDCARD_DETECT_EXTI_LINE             EXTI_Line2
-#define SDCARD_DETECT_EXTI_PIN_SOURCE       EXTI_PinSource2
-#define SDCARD_DETECT_EXTI_PORT_SOURCE      EXTI_PortSourceGPIOD
-#define SDCARD_DETECT_EXTI_IRQn             EXTI2_IRQn
-
-#define SDCARD_SPI_INSTANCE                 SPI3
-#define SDCARD_SPI_CS_PIN                   PB3
-
-// SPI2 is on the APB1 bus whose clock runs at 84MHz. Divide to under 400kHz for init:
-#define SDCARD_SPI_INITIALIZATION_CLOCK_DIVIDER 256 // 328kHz
-// Divide to under 25MHz for normal operation:
-#define SDCARD_SPI_FULL_SPEED_CLOCK_DIVIDER     4 // 21MHz
-
-#define SDCARD_DMA_CHANNEL_TX               DMA1_Stream5
-#define SDCARD_DMA_CHANNEL_TX_COMPLETE_FLAG DMA_FLAG_TCIF5
-#define SDCARD_DMA_CLK                      RCC_AHB1Periph_DMA1
-#define SDCARD_DMA_CHANNEL                  DMA_Channel_0
-
-//#define USE_FLASHFS
-//#define USE_FLASH_M25P16
-//#define M25P16_CS_PIN         PB3
-//#define M25P16_SPI_INSTANCE   SPI3
+#define USE_FLASHFS
+#define USE_FLASH_M25P16
+#define M25P16_CS_PIN         PB3
+#define M25P16_SPI_INSTANCE   SPI3
 
 #define USABLE_TIMER_CHANNEL_COUNT 5  //  chane to 6
 
