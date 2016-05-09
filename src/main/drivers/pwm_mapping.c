@@ -476,18 +476,18 @@ static const uint16_t airPWM[] = {
 
 #ifdef REVONANO
 static const uint16_t multiPPM[] = {
-	PWM6  | (MAP_TO_PPM_INPUT << 8),     // PPM input
-    PWM7  | (MAP_TO_MOTOR_OUTPUT << 8),      // Swap to servo if needed
-    PWM8  | (MAP_TO_MOTOR_OUTPUT << 8),      // Swap to servo if needed
-    PWM9  | (MAP_TO_MOTOR_OUTPUT << 8),
-    PWM10 | (MAP_TO_MOTOR_OUTPUT << 8),
+	PWM1  | (MAP_TO_PPM_INPUT << 8),     // PPM input
+    PWM7  | (MAP_TO_MOTOR_OUTPUT << 8),     // Motor #1
+    PWM8  | (MAP_TO_MOTOR_OUTPUT << 8),     // Motor #2
+    PWM9  | (MAP_TO_MOTOR_OUTPUT << 8),     // Motor #3
+    PWM10 | (MAP_TO_MOTOR_OUTPUT << 8),     // Motor #4
     PWM11 | (MAP_TO_MOTOR_OUTPUT << 8),
     PWM12 | (MAP_TO_MOTOR_OUTPUT << 8),
     PWM2  | (MAP_TO_MOTOR_OUTPUT << 8),
     PWM3  | (MAP_TO_MOTOR_OUTPUT << 8),      // Swap to servo if needed
     PWM4  | (MAP_TO_MOTOR_OUTPUT << 8),      // Swap to servo if needed
     PWM5  | (MAP_TO_MOTOR_OUTPUT << 8),      // Swap to servo if needed
-    PWM1  | (MAP_TO_MOTOR_OUTPUT << 8),      // Swap to servo if needed
+    PWM6  | (MAP_TO_MOTOR_OUTPUT << 8),      // Swap to servo if needed
     0xFFFF
 };
 static const uint16_t multiPWM[] = {
@@ -507,18 +507,18 @@ static const uint16_t multiPWM[] = {
 };
 
 static const uint16_t airPPM[] = {
-    PWM6  | (MAP_TO_PPM_INPUT << 8),     // PPM input
-    PWM7  | (MAP_TO_MOTOR_OUTPUT  << 8),
-    PWM8  | (MAP_TO_MOTOR_OUTPUT  << 8),
-    PWM9  | (MAP_TO_SERVO_OUTPUT  << 8),
-    PWM10 | (MAP_TO_SERVO_OUTPUT  << 8),
-    PWM11 | (MAP_TO_SERVO_OUTPUT  << 8),
-    PWM12 | (MAP_TO_SERVO_OUTPUT  << 8),
-    PWM2  | (MAP_TO_SERVO_OUTPUT  << 8),
-    PWM3  | (MAP_TO_SERVO_OUTPUT  << 8),
-    PWM4  | (MAP_TO_SERVO_OUTPUT  << 8),
-    PWM5  | (MAP_TO_SERVO_OUTPUT  << 8),
-    PWM1  | (MAP_TO_SERVO_OUTPUT  << 8),
+	PWM1  | (MAP_TO_PPM_INPUT << 8),     // PPM input
+    PWM7  | (MAP_TO_MOTOR_OUTPUT << 8),      // Motor #1
+    PWM8  | (MAP_TO_MOTOR_OUTPUT << 8),      // Swap to servo if needed
+    PWM9  | (MAP_TO_MOTOR_OUTPUT << 8),
+    PWM10 | (MAP_TO_MOTOR_OUTPUT << 8),
+    PWM11 | (MAP_TO_MOTOR_OUTPUT << 8),
+    PWM12 | (MAP_TO_MOTOR_OUTPUT << 8),
+    PWM2  | (MAP_TO_MOTOR_OUTPUT << 8),
+    PWM3  | (MAP_TO_MOTOR_OUTPUT << 8),      // Swap to servo if needed
+    PWM4  | (MAP_TO_MOTOR_OUTPUT << 8),      // Swap to servo if needed
+    PWM5  | (MAP_TO_MOTOR_OUTPUT << 8),      // Swap to servo if needed
+    PWM6  | (MAP_TO_MOTOR_OUTPUT << 8),      // Swap to servo if needed
     0xFFFF
 };
 
@@ -846,6 +846,44 @@ static const uint16_t airPWM[] = {
 	PWM15 | (MAP_TO_SERVO_OUTPUT  << 8),
 	PWM16 | (MAP_TO_SERVO_OUTPUT  << 8), // server #6
 	0xFFFF
+};
+#endif
+
+#ifdef KKNGF4
+static const uint16_t multiPPM[] = {
+    PWM1  | (MAP_TO_PPM_INPUT << 8),     // PPM input
+    PWM2  | (MAP_TO_MOTOR_OUTPUT << 8),
+    PWM3  | (MAP_TO_MOTOR_OUTPUT << 8),
+    PWM4  | (MAP_TO_MOTOR_OUTPUT << 8),
+    PWM5  | (MAP_TO_MOTOR_OUTPUT << 8),
+    0xFFFF
+};
+
+static const uint16_t multiPWM[] = {
+    PWM1  | (MAP_TO_PWM_INPUT << 8),
+    PWM2  | (MAP_TO_MOTOR_OUTPUT << 8),
+    PWM3  | (MAP_TO_MOTOR_OUTPUT << 8),
+    PWM4  | (MAP_TO_MOTOR_OUTPUT << 8),
+    PWM5  | (MAP_TO_MOTOR_OUTPUT << 8),
+    0xFFFF
+};
+
+static const uint16_t airPPM[] = {
+    PWM1  | (MAP_TO_PPM_INPUT << 8),     // PPM input
+    PWM2  | (MAP_TO_MOTOR_OUTPUT  << 8),
+    PWM3  | (MAP_TO_MOTOR_OUTPUT  << 8),
+    PWM4  | (MAP_TO_SERVO_OUTPUT  << 8),
+    PWM5  | (MAP_TO_SERVO_OUTPUT  << 8),
+    0xFFFF
+};
+
+static const uint16_t airPWM[] = {
+    PWM1  | (MAP_TO_PWM_INPUT << 8),
+    PWM2  | (MAP_TO_MOTOR_OUTPUT << 8),
+    PWM3  | (MAP_TO_MOTOR_OUTPUT << 8),
+    PWM4  | (MAP_TO_MOTOR_OUTPUT << 8),
+    PWM5  | (MAP_TO_MOTOR_OUTPUT << 8),
+    0xFFFF
 };
 #endif
 
@@ -1201,6 +1239,11 @@ if (init->useBuzzerP6) {
                 ppmAvoidPWMTimerClash(timerHardwarePtr, TIM1);
             }
 #endif
+//#ifdef KKNGF4
+//            if (init->useMultiShot || init->useOneshot || isMotorBrushed(init->motorPwmRate)) {
+//                ppmAvoidPWMTimerClash(timerHardwarePtr, TIM8);
+//            }
+//#endif
 #ifdef CC3D
             if (init->useMultiShot || init->useOneshot || isMotorBrushed(init->motorPwmRate)) {
                 ppmAvoidPWMTimerClash(timerHardwarePtr, TIM4);
@@ -1216,13 +1259,13 @@ if (init->useBuzzerP6) {
             pwmInConfig(timerHardwarePtr, channelIndex);
             channelIndex++;
         } else if (type == MAP_TO_MOTOR_OUTPUT) {
-            if (init->useOneshot) 
+            if (init->useOneshot)
             {
-                if (init->useFastPWM) 
+                if (init->useFastPWM)
                 {
                     fastPWMMotorConfig(timerHardwarePtr, pwmOutputConfiguration.motorCount, init->motorPwmRate, init->idlePulse);
-                } 
-                else 
+                }
+                else
                 {
                     if (init->usePwmRate)
                     {

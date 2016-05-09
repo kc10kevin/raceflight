@@ -311,20 +311,27 @@ bool mpuGyroRead(int16_t *gyroADC)
         return false;
     }
 
-    static int16_t last_data0[3] = {0, 0, 0};
-    static int16_t last_data1[3] = {0, 0, 0};
+    static int32_t last_data0[3] = {0, 0, 0};
+    static int32_t last_data1[3] = {0, 0, 0};
+    int32_t current_data[3] = {0, 0, 0};
 
-    gyroADC[0] = ((int16_t)((data[0] << 8) | data[1]) + last_data0[0] + last_data1[0]) / 3;
-    gyroADC[1] = ((int16_t)((data[2] << 8) | data[3]) + last_data0[1] + last_data1[1]) / 3;
-    gyroADC[2] = ((int16_t)((data[4] << 8) | data[5]) + last_data0[2] + last_data1[2]) / 3;
+	current_data[0] = (int16_t)((data[0] << 8) | data[1]);
+	current_data[1] = (int16_t)((data[2] << 8) | data[3]);
+	current_data[2] = (int16_t)((data[4] << 8) | data[5]);
 
-    last_data0[0] = last_data1[0];
-    last_data0[1] = last_data1[1];
-    last_data0[2] = last_data1[2];
-
-    last_data1[0] = (int16_t)((data[0] << 8) | data[1]);
-    last_data1[1] = (int16_t)((data[2] << 8) | data[3]);
-    last_data1[2] = (int16_t)((data[4] << 8) | data[5]);
+	int count;
+	for (count=0; count < 3; count++) {
+		//Overflow sanity check. Not working right yet.
+		//if ( (last_data0[count] - current_data[count]) <= -32000) {
+		//	current_data[count] = -32677;
+		//} else
+		//if ( (-last_data0[count] + current_data[count]) <= -32000) {
+		//	current_data[count] = 32677;
+		//}
+		gyroADC[count] = (int16_t)((current_data[count] + last_data0[count] + last_data1[count]) / 3);
+		last_data1[count] = last_data0[count];
+		last_data0[count] = current_data[count];
+	}
 
     return true;
 }
