@@ -25,17 +25,13 @@
 #include "gpio.h"
 #include "timer.h"
 
+#include "pwm_mapping.h"
 #include "pwm_output.h"
 #include "pwm_rx.h"
-#include "pwm_mapping.h"
 
-void pwmBrushedMotorConfig(const timerHardware_t *timerHardware, uint8_t motorIndex, uint16_t motorPwmRate, uint16_t idlePulse);
+void pwmBrushedMotorConfig(const timerHardware_t *timerHardware, uint8_t motorIndex, uint16_t motorPwmRate);
 void pwmBrushlessMotorConfig(const timerHardware_t *timerHardware, uint8_t motorIndex, uint16_t motorPwmRate, uint16_t idlePulse);
-void fastPWMMotorConfig(const timerHardware_t *timerHardware, uint8_t motorIndex, uint16_t motorPwmRate, uint16_t idlePulse);
-void pwmOneshotPwmRateMotorConfig(const timerHardware_t *timerHardware, uint8_t motorIndex, uint16_t motorPwmRate, uint16_t idlePulse);
-void pwmOneshotMotorConfig(const timerHardware_t *timerHardware, uint8_t motorIndex);
-void pwmMultiShotPwmRateMotorConfig(const timerHardware_t *timerHardware, uint8_t motorIndex, uint16_t motorPwmRate, uint16_t idlePulse);
-void pwmMultiShotMotorConfig(const timerHardware_t *timerHardware, uint8_t motorIndex);
+void pwmOneShotMotorConfig(const timerHardware_t *timerHardware, uint8_t motorIndex, uint16_t motorPwmRate, pwmMotorProtocol_e protocol);
 void pwmServoConfig(const timerHardware_t *timerHardware, uint8_t servoIndex, uint16_t servoPwmRate, uint16_t servoCenterPulse);
 
 /*
@@ -1243,6 +1239,7 @@ if (init->useBuzzerP6) {
 
 #endif
 
+/* TODO: For F4 targets ADC is currently using IO mapping so this no longer holds true. Ok for the minute as no clashes (more pins on F4 targets). */
 #ifdef VBAT_ADC_GPIO
         if (init->useVbat && timerHardwarePtr->gpio == VBAT_ADC_GPIO && timerHardwarePtr->pin == VBAT_ADC_GPIO_PIN) {
             continue;
@@ -1357,56 +1354,53 @@ if (init->useBuzzerP6) {
         }
 #endif
 
+#define AVOIDANCE_CONDITION (!(init->motorPwmProtocol == MOTOR_PWM_PROTOCOL_STD))
+        
         if (type == MAP_TO_PPM_INPUT) {
 #ifdef REVO
-            if (init->useMultiShot || init->useOneshot || isMotorBrushed(init->motorPwmRate)) {
-                ppmAvoidPWMTimerClash(timerHardwarePtr, TIM12);
-                ppmAvoidPWMTimerClash(timerHardwarePtr, TIM8);
+            if (AVOIDANCE_CONDITION) {
+                ppmAvoidPWMTimerClash(timerHardwarePtr, TIM12, init);
+                ppmAvoidPWMTimerClash(timerHardwarePtr, TIM8, init);
             }
 #endif
-#ifdef REVONANO
-            if (init->useMultiShot || init->useOneshot || isMotorBrushed(init->motorPwmRate)) {
-                ppmAvoidPWMTimerClash(timerHardwarePtr, TIM2);
+#if defined(REVONANO) || defined(SPARKY) || defined(ALIENFLIGHTF3)
+            if (AVOIDANCE_CONDITION) {
+                ppmAvoidPWMTimerClash(timerHardwarePtr, TIM2, init);
             }
 #endif
 #ifdef SPARKY2
-            if (init->useMultiShot || init->useOneshot || isMotorBrushed(init->motorPwmRate)) {
-                ppmAvoidPWMTimerClash(timerHardwarePtr, TIM8);
+            if (AVOIDANCE_CONDITION) {
+                ppmAvoidPWMTimerClash(timerHardwarePtr, TIM8, init);
             }
 #endif
 #ifdef ALIENFLIGHTF4
-            if (init->useMultiShot || init->useOneshot || isMotorBrushed(init->motorPwmRate)) {
-                ppmAvoidPWMTimerClash(timerHardwarePtr, TIM1);
+            if (AVOIDANCE_CONDITION) {
+                ppmAvoidPWMTimerClash(timerHardwarePtr, TIM1, init);
             }
 #endif
 #ifdef AQ32_V2
-            if (init->useMultiShot || init->useOneshot || isMotorBrushed(init->motorPwmRate)) {
-                ppmAvoidPWMTimerClash(timerHardwarePtr, TIM4);
+            if (AVOIDANCE_CONDITION) {
+                ppmAvoidPWMTimerClash(timerHardwarePtr, TIM4, init);
             }
 #endif
 #ifdef VRCORE
-            if (init->useMultiShot || init->useOneshot || isMotorBrushed(init->motorPwmRate)) {
-                ppmAvoidPWMTimerClash(timerHardwarePtr, TIM1);
+            if (AVOIDANCE_CONDITION) {
+                ppmAvoidPWMTimerClash(timerHardwarePtr, TIM1, init);
             }
 #endif
 #ifdef YOUPIF4
-            if (init->useMultiShot || init->useOneshot || isMotorBrushed(init->motorPwmRate)) {
-                ppmAvoidPWMTimerClash(timerHardwarePtr, TIM8);
+            if (AVOIDANCE_CONDITION) {
+                ppmAvoidPWMTimerClash(timerHardwarePtr, TIM8, init);
             }
 #endif
 //#ifdef KKNGF4
-//            if (init->useMultiShot || init->useOneshot || isMotorBrushed(init->motorPwmRate)) {
-//                ppmAvoidPWMTimerClash(timerHardwarePtr, TIM8);
+//            if (AVOIDANCE_CONDITION) {
+//                ppmAvoidPWMTimerClash(timerHardwarePtr, TIM8, init);
 //            }
 //#endif
 #ifdef CC3D
-            if (init->useMultiShot || init->useOneshot || isMotorBrushed(init->motorPwmRate)) {
-                ppmAvoidPWMTimerClash(timerHardwarePtr, TIM4);
-            }
-#endif
-#ifdef SPARKY
-            if (init->useMultiShot || init->useOneshot || isMotorBrushed(init->motorPwmRate)) {
-                ppmAvoidPWMTimerClash(timerHardwarePtr, TIM2);
+            if (AVOIDANCE_CONDITION) {
+                ppmAvoidPWMTimerClash(timerHardwarePtr, TIM2, init);
             }
 #endif
             ppmInConfig(timerHardwarePtr);
@@ -1414,42 +1408,35 @@ if (init->useBuzzerP6) {
             pwmInConfig(timerHardwarePtr, channelIndex);
             channelIndex++;
         } else if (type == MAP_TO_MOTOR_OUTPUT) {
-            if (init->useOneshot)
-            {
-                if (init->useFastPWM)
-                {
-                    fastPWMMotorConfig(timerHardwarePtr, pwmOutputConfiguration.motorCount, init->motorPwmRate, init->idlePulse);
-                }
-                else
-                {
-                    if (init->usePwmRate)
-                    {
-                        pwmOneshotPwmRateMotorConfig(timerHardwarePtr, pwmOutputConfiguration.motorCount, init->motorPwmRate, init->idlePulse);
-                    }
-                    else
-                    {
-                        pwmOneshotMotorConfig(timerHardwarePtr, pwmOutputConfiguration.motorCount);
-                    }
-                }
-                pwmOutputConfiguration.portConfigurations[pwmOutputConfiguration.outputCount].flags = PWM_PF_MOTOR | PWM_PF_OUTPUT_PROTOCOL_ONESHOT|PWM_PF_OUTPUT_PROTOCOL_PWM ;
-            } 
-            else if (init->useMultiShot) {
-                if (init->usePwmRate)
-                {
-                    pwmMultiShotPwmRateMotorConfig(timerHardwarePtr, pwmOutputConfiguration.motorCount, init->motorPwmRate, init->idlePulse);
-                }
-                else
-                {
-                	pwmMultiShotMotorConfig(timerHardwarePtr, pwmOutputConfiguration.motorCount);
-                }
-                pwmOutputConfiguration.portConfigurations[pwmOutputConfiguration.outputCount].flags = PWM_PF_MOTOR | PWM_PF_OUTPUT_PROTOCOL_MULTISHOT|PWM_PF_OUTPUT_PROTOCOL_PWM ;
-            } else if (isMotorBrushed(init->motorPwmRate)) {
-                pwmBrushedMotorConfig(timerHardwarePtr, pwmOutputConfiguration.motorCount, init->motorPwmRate, init->idlePulse);
-                pwmOutputConfiguration.portConfigurations[pwmOutputConfiguration.outputCount].flags = PWM_PF_MOTOR | PWM_PF_MOTOR_MODE_BRUSHED | PWM_PF_OUTPUT_PROTOCOL_PWM;
-            } else {
-                pwmBrushlessMotorConfig(timerHardwarePtr, pwmOutputConfiguration.motorCount, init->motorPwmRate, init->idlePulse);
-                pwmOutputConfiguration.portConfigurations[pwmOutputConfiguration.outputCount].flags = PWM_PF_MOTOR | PWM_PF_OUTPUT_PROTOCOL_PWM ;
+
+#ifdef CC3D
+            if (AVOIDANCE_CONDITION) {
+            	// Skip it if it would cause PPM capture timer to be reconfigured or manually overflowed
+            	if (timerHardwarePtr->tim == TIM2)
+            		continue;
             }
+#endif  
+        
+	        switch (init->motorPwmProtocol)
+	        {
+	        case MOTOR_PWM_PROTOCOL_125: // oneshot125
+	        case MOTOR_PWM_PROTOCOL_42:  // oneshot42
+		        pwmOneShotMotorConfig(timerHardwarePtr, pwmOutputConfiguration.motorCount, init->motorPwmRate, init->motorPwmProtocol);
+		        pwmOutputConfiguration.portConfigurations[pwmOutputConfiguration.outputCount].flags = PWM_PF_MOTOR | PWM_PF_OUTPUT_PROTOCOL_ONESHOT | PWM_PF_OUTPUT_PROTOCOL_PWM;
+		        break;
+	        case MOTOR_PWM_PROTOCOL_MULTI: // multishot
+		        pwmOneShotMotorConfig(timerHardwarePtr, pwmOutputConfiguration.motorCount, init->motorPwmRate, init->motorPwmProtocol);
+		        pwmOutputConfiguration.portConfigurations[pwmOutputConfiguration.outputCount].flags = PWM_PF_MOTOR | PWM_PF_OUTPUT_PROTOCOL_MULTISHOT | PWM_PF_OUTPUT_PROTOCOL_PWM;
+		        break;
+	        case MOTOR_PWM_PROTOCOL_BRUSHED: 
+		        pwmBrushedMotorConfig(timerHardwarePtr, pwmOutputConfiguration.motorCount, init->motorPwmRate);
+		        pwmOutputConfiguration.portConfigurations[pwmOutputConfiguration.outputCount].flags = PWM_PF_MOTOR | PWM_PF_MOTOR_MODE_BRUSHED | PWM_PF_OUTPUT_PROTOCOL_PWM;
+    	        break;
+	        default:
+		        pwmBrushlessMotorConfig(timerHardwarePtr, pwmOutputConfiguration.motorCount, init->motorPwmRate, init->idlePulse);
+		        pwmOutputConfiguration.portConfigurations[pwmOutputConfiguration.outputCount].flags = PWM_PF_MOTOR | PWM_PF_OUTPUT_PROTOCOL_PWM;
+	        }
+           			
             pwmOutputConfiguration.portConfigurations[pwmOutputConfiguration.outputCount].index = pwmOutputConfiguration.motorCount;
             pwmOutputConfiguration.portConfigurations[pwmOutputConfiguration.outputCount].timerHardware = timerHardwarePtr;
             pwmOutputConfiguration.motorCount++;

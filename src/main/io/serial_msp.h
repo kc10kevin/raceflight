@@ -45,7 +45,7 @@
  * that the newer API version may cause problems before using API commands that change FC state.
  *
  * It is for this reason that each MSP command should be specific as possible, such that changes
- * to commands break as little functionality as possible.
+ * to commands break as little client functionality as possible.
  *
  * API client authors MAY use a compatibility matrix/table when determining if they can support
  * a given command from a given flight controller at a given api version level.
@@ -59,7 +59,7 @@
 #define MSP_PROTOCOL_VERSION                0
 
 #define API_VERSION_MAJOR                   1 // increment when major changes are made
-#define API_VERSION_MINOR                   14 // increment when any change is made, reset to zero when major changes are released after changing API_VERSION_MAJOR
+#define API_VERSION_MINOR                   16 // increment when any change is made, reset to zero when major changes are released after changing API_VERSION_MAJOR
 
 #define API_VERSION_LENGTH                  2
 
@@ -70,7 +70,7 @@
 #define BASEFLIGHT_IDENTIFIER "BAFL";
 
 #define FLIGHT_CONTROLLER_IDENTIFIER_LENGTH 4
-static const char * const flightControllerIdentifier = RACEFLIGHT_IDENTIFIER; // 4 UPPER CASE alpha numeric characters that identify the flight controller.
+extern const char * const flightControllerIdentifier;
 
 #define FLIGHT_CONTROLLER_VERSION_LENGTH    3
 #define FLIGHT_CONTROLLER_VERSION_MASK      0xFFF
@@ -161,6 +161,14 @@ static const char * const boardIdentifier = TARGET_BOARD_IDENTIFIER;
 #define MSP_RXFAIL_CONFIG               77 //out message         Returns RXFAIL settings
 #define MSP_SET_RXFAIL_CONFIG           78 //in message          Sets RXFAIL settings
 
+#define MSP_SDCARD_SUMMARY              79 //out message         Get the state of the SD card
+
+#define MSP_BLACKBOX_CONFIG             80 //out message         Get blackbox settings
+#define MSP_SET_BLACKBOX_CONFIG         81 //in message          Set blackbox settings
+
+#define MSP_TRANSPONDER_CONFIG          82 //in message          Get transponder settings
+#define MSP_SET_TRANSPONDER_CONFIG      83 //out message         Set transponder settings
+
 //
 // Baseflight MSP commands (if enabled they exist in Cleanflight)
 //
@@ -208,7 +216,15 @@ static const char * const boardIdentifier = TARGET_BOARD_IDENTIFIER;
 #define MSP_NAV_STATUS           121    //out message         Returns navigation status
 #define MSP_NAV_CONFIG           122    //out message         Returns navigation parameters
 #define MSP_PID_FLOAT            123    //out message         P I D Used for Luxfloat
+#define MSP_3D                   124    //out message         Settings needed for reversible ESCs
+#define MSP_RC_DEADBAND          125    //out message         deadbands for yaw alt pitch roll
+#define MSP_SENSOR_ALIGNMENT     126    //out message         orientation of acc,gyro,mag
 
+/* raceflight (counting down from 200 for compatibility) */
+#define MSP_MOTOR_PWM            199    // out message        configuration of the motor PWM details.
+#define MSP_SET_MOTOR_PWM        198    // in message         configuration of the motor PWM details.
+
+/* cleanflight beta flight */
 #define MSP_SET_RAW_RC           200    //in message          8 rc chan
 #define MSP_SET_RAW_GPS          201    //in message          fix, numsat, lat, lon, alt, speed
 #define MSP_SET_PID              202    //in message          P I D coeff (9 are used currently)
@@ -225,8 +241,13 @@ static const char * const boardIdentifier = TARGET_BOARD_IDENTIFIER;
 #define MSP_SET_MOTOR            214    //in message          PropBalance function
 #define MSP_SET_NAV_CONFIG       215    //in message          Sets nav config parameters - write to the eeprom
 #define MSP_SET_PID_FLOAT        216    //in message          P I D used for luxfloat
+#define MSP_SET_3D               217    //in message          Settings needed for reversible ESCs
+#define MSP_SET_RC_DEADBAND      218    //in message          deadbands for yaw alt pitch roll
+#define MSP_SET_RESET_CURR_PID   219    //in message          resetting the current pid profile to defaults
+#define MSP_SET_SENSOR_ALIGNMENT 220    //in message          set the orientation of the acc,gyro,mag
 
 // #define MSP_BIND                 240    //in message          no param
+// #define MSP_ALARMS               242
 
 #define MSP_EEPROM_WRITE         250    //in message          no param
 
@@ -234,16 +255,17 @@ static const char * const boardIdentifier = TARGET_BOARD_IDENTIFIER;
 #define MSP_DEBUG                254    //out message         debug1,debug2,debug3,debug4
 
 // Additional commands that are not compatible with MultiWii
+#define MSP_STATUS_EX            150    //out message         cycletime, errors_count, CPU load, sensor present etc
 #define MSP_UID                  160    //out message         Unique device ID
+#define MSP_GPSSVINFO            164    //out message         get Signal Strength (only U-Blox)
 #define MSP_ACC_TRIM             240    //out message         get acc angle trim values
 #define MSP_SET_ACC_TRIM         239    //in message          set acc angle trim values
-#define MSP_GPSSVINFO            164    //out message         get Signal Strength (only U-Blox)
 #define MSP_SERVO_MIX_RULES      241    //out message         Returns servo mixer configuration
 #define MSP_SET_SERVO_MIX_RULE   242    //in message          Sets servo mixer configuration
 #define MSP_SET_1WIRE            243    //in message          Sets 1Wire paththrough
-
 #define MSP_SET_ESCSERIAL        244    //in message          Sets escserial passthrough
 #define MSP_SET_4WAY_IF          245    //in message          Sets 4way interface
+
 // Each MSP port requires state and a receive buffer, revisit this default if someone needs more than 2 MSP ports.
 #define MAX_MSP_PORT_COUNT 2
 
@@ -257,6 +279,12 @@ typedef enum {
     COMMAND_RECEIVED
 } mspState_e;
 
+typedef enum {
+    UNUSED_PORT = 0,
+    FOR_GENERAL_MSP,
+    FOR_TELEMETRY
+} mspPortUsage_e;
+
 #define MSP_PORT_INBUF_SIZE 64
 
 typedef struct mspPort_s {
@@ -268,6 +296,7 @@ typedef struct mspPort_s {
     uint8_t inBuf[MSP_PORT_INBUF_SIZE];
     mspState_e c_state;
     uint8_t cmdMSP;
+    mspPortUsage_e mspPortUsage;
 } mspPort_t;
 
 void mspInit(serialConfig_t *serialConfig);

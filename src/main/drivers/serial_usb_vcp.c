@@ -26,7 +26,7 @@
 #include "common/utils.h"
 
 #include "usb_core.h"
-#if defined(STM32F411xE) || defined(STM32F40_41xxx)
+#ifdef STM32F4
 #include "usbd_cdc_vcp.h"
 #else
 #include "usb_init.h"
@@ -156,7 +156,7 @@ serialPort_t *usbVcpOpen(void)
 {
     vcpPort_t *s;
 
-#if defined(STM32F411xE) || defined(STM32F40_41xxx)
+#ifdef STM32F4
 	USBD_Init(&USB_OTG_dev,
              USB_OTG_FS_CORE_ID,
              &USR_desc,

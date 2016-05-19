@@ -23,8 +23,8 @@
 
 #include "build_config.h"
 #include "debug.h"
-
 #include "platform.h"
+#include "scheduler.h"
 
 #include "common/axis.h"
 #include "common/color.h"
@@ -40,8 +40,10 @@
 #include "drivers/bus_i2c.h"
 #include "drivers/gpio.h"
 #include "drivers/timer.h"
+#include "drivers/pwm_mapping.h"
 #include "drivers/pwm_rx.h"
 #include "drivers/gyro_sync.h"
+#include "drivers/sdcard.h"
 #include "drivers/buf_writer.h"
 #include "rx/rx.h"
 #include "rx/msp.h"
@@ -54,6 +56,7 @@
 #include "io/serial.h"
 #include "io/ledstrip.h"
 #include "io/flashfs.h"
+#include "io/asyncfatfs/asyncfatfs.h"
 
 #include "telemetry/telemetry.h"
 
@@ -72,6 +75,8 @@
 #include "flight/failsafe.h"
 #include "flight/navigation.h"
 #include "flight/altitudehold.h"
+
+#include "blackbox/blackbox.h"
 
 #include "mw.h"
 
@@ -95,8 +100,11 @@ static serialPort_t *mspSerialPort;
 
 extern uint16_t cycleTime; // FIXME dependency on mw.c
 extern uint16_t rssi; // FIXME dependency on mw.c
+extern void resetPidProfile(pidProfile_t *pidProfile);
 
 void useRcControlsConfig(modeActivationCondition_t *modeActivationConditions, escAndServoConfig_t *escAndServoConfigToUse, pidProfile_t *pidProfileToUse);
+
+const char * const flightControllerIdentifier = RACEFLIGHT_IDENTIFIER; // 4 UPPER CASE alpha numeric characters that identify the flight controller.
 
 typedef struct box_e {
     const uint8_t boxId;         // see boxId_e
@@ -165,10 +173,13 @@ static const char pidnames[] =
     "VEL;";
 
 typedef enum {
-    UNUSED_PORT = 0,
-    FOR_GENERAL_MSP,
-    FOR_TELEMETRY
-} mspPortUsage_e;
+    MSP_SDCARD_STATE_NOT_PRESENT = 0,
+    MSP_SDCARD_STATE_FATAL       = 1,
+    MSP_SDCARD_STATE_CARD_INIT   = 2,
+    MSP_SDCARD_STATE_FS_INIT     = 3,
+    MSP_SDCARD_STATE_READY       = 4
+} mspSDCardState_e;
+
 
 STATIC_UNIT_TESTED mspPort_t mspPorts[MAX_MSP_PORT_COUNT];
 
@@ -312,17 +323,67 @@ reset:
     }
 }
 
+static void serializeSDCardSummaryReply(void)
+{
+    headSerialReply(3 + 4 + 4);
+
+#ifdef USE_SDCARD
+    uint8_t flags = 1 /* SD card supported */ ;
+    uint8_t state;
+
+    serialize8(flags);
+
+    // Merge the card and filesystem states together
+    if (!sdcard_isInserted()) {
+        state = MSP_SDCARD_STATE_NOT_PRESENT;
+    } else if (!sdcard_isFunctional()) {
+        state = MSP_SDCARD_STATE_FATAL;
+    } else {
+        switch (afatfs_getFilesystemState()) {
+            case AFATFS_FILESYSTEM_STATE_READY:
+                state = MSP_SDCARD_STATE_READY;
+            break;
+            case AFATFS_FILESYSTEM_STATE_INITIALIZATION:
+                if (sdcard_isInitialized()) {
+                    state = MSP_SDCARD_STATE_FS_INIT;
+                } else {
+                    state = MSP_SDCARD_STATE_CARD_INIT;
+                }
+            break;
+            case AFATFS_FILESYSTEM_STATE_FATAL:
+            case AFATFS_FILESYSTEM_STATE_UNKNOWN:
+                state = MSP_SDCARD_STATE_FATAL;
+            break;
+        }
+    }
+
+    serialize8(state);
+    serialize8(afatfs_getLastError());
+    // Write free space and total space in kilobytes
+    serialize32(afatfs_getContiguousFreeSpace() / 1024);
+    serialize32(sdcard_getMetadata()->numBlocks / 2); // Block size is half a kilobyte
+#else
+    serialize8(0);
+    serialize8(0);
+    serialize8(0);
+    serialize32(0);
+    serialize32(0);
+#endif
+}
+
 static void serializeDataflashSummaryReply(void)
 {
     headSerialReply(1 + 3 * 4);
 #ifdef USE_FLASHFS
     const flashGeometry_t *geometry = flashfsGetGeometry();
-    serialize8(flashfsIsReady() ? 1 : 0);
+    uint8_t flags = (flashfsIsReady() ? 1 : 0) | 2 /* FlashFS is supported */;
+
+    serialize8(flags);
     serialize32(geometry->sectors);
     serialize32(geometry->totalSize);
     serialize32(flashfsGetOffset()); // Effectively the current number of bytes stored on the volume
 #else
-    serialize8(0);
+    serialize8(0); // FlashFS is neither ready nor supported
     serialize32(0);
     serialize32(0);
     serialize32(0);
@@ -411,9 +472,11 @@ void mspInit(serialConfig_t *serialConfig)
         activeBoxIds[activeBoxIdCount++] = BOXHORIZON;
     }
 
+#ifdef BARO
     if (sensors(SENSOR_BARO)) {
         activeBoxIds[activeBoxIdCount++] = BOXBARO;
     }
+#endif
 
     activeBoxIds[activeBoxIdCount++] = BOXAIRMODE;
     activeBoxIds[activeBoxIdCount++] = BOXACROPLUS;
@@ -437,7 +500,7 @@ void mspInit(serialConfig_t *serialConfig)
     }
 #endif
 
-    if (masterConfig.mixerMode == MIXER_FLYING_WING || masterConfig.mixerMode == MIXER_AIRPLANE)
+    if (masterConfig.mixerMode == MIXER_FLYING_WING || masterConfig.mixerMode == MIXER_AIRPLANE || masterConfig.mixerMode == MIXER_CUSTOM_AIRPLANE)
         activeBoxIds[activeBoxIdCount++] = BOXPASSTHRU;
 
     activeBoxIds[activeBoxIdCount++] = BOXBEEPERON;
@@ -453,8 +516,10 @@ void mspInit(serialConfig_t *serialConfig)
 
     activeBoxIds[activeBoxIdCount++] = BOXOSD;
 
+#ifdef TELEMETRY
     if (feature(FEATURE_TELEMETRY) && masterConfig.telemetryConfig.telemetry_switch)
         activeBoxIds[activeBoxIdCount++] = BOXTELEMETRY;
+#endif
 
     if (feature(FEATURE_SONAR)){
         activeBoxIds[activeBoxIdCount++] = BOXSONAR;
@@ -522,7 +587,7 @@ static uint32_t packFlightModeFlags(void)
         IS_ENABLED(FLIGHT_MODE(FAILSAFE_MODE)) << BOXFAILSAFE |
         IS_ENABLED(IS_RC_MODE_ACTIVE(BOXAIRMODE)) << BOXAIRMODE|
         IS_ENABLED(IS_RC_MODE_ACTIVE(BOXACROPLUS)) << BOXACROPLUS|
-	IS_ENABLED(IS_RC_MODE_ACTIVE(BOXALWAYSSTABILIZED)) << BOXALWAYSSTABILIZED|
+		IS_ENABLED(IS_RC_MODE_ACTIVE(BOXALWAYSSTABILIZED)) << BOXALWAYSSTABILIZED|
        	IS_ENABLED(IS_RC_MODE_ACTIVE(BOXTEST1)) << BOXTEST1|
         IS_ENABLED(IS_RC_MODE_ACTIVE(BOXTEST2)) << BOXTEST2;
 
@@ -613,6 +678,20 @@ static bool processOutCommand(uint8_t cmdMSP)
         serialize8(masterConfig.mixerMode);
         serialize8(MSP_PROTOCOL_VERSION);
         serialize32(CAP_DYNBALANCE); // "capability"
+        break;
+
+    case MSP_STATUS_EX:
+        headSerialReply(14);
+        serialize16(cycleTime);
+#ifdef USE_I2C
+        serialize16(i2cGetErrorCounter());
+#else
+        serialize16(0);
+#endif
+        serialize16(sensors(SENSOR_ACC) | sensors(SENSOR_BARO) << 1 | sensors(SENSOR_MAG) << 2 | sensors(SENSOR_GPS) << 3 | sensors(SENSOR_SONAR) << 4);
+        serialize32(packFlightModeFlags());
+        serialize8(masterConfig.current_profile_index);
+        serialize16(averageSystemLoadPercent);
         break;
 
     case MSP_STATUS:
@@ -737,7 +816,7 @@ static bool processOutCommand(uint8_t cmdMSP)
         serialize8(masterConfig.profile[0].rcControlsConfig.yaw_deadband);
         serialize8(currentProfile->pidProfile.gyro_lpf_hz);
         serialize8(currentProfile->pidProfile.dterm_lpf_hz);
-        //serialize8(currentProfile->pidProfile.yaw_pterm_cut_hz);
+//        serialize8(currentProfile->pidProfile.yaw_pterm_cut_hz);
         break;
     case MSP_PID:
         headSerialReply(3 * PID_ITEM_COUNT);
@@ -875,6 +954,12 @@ static bool processOutCommand(uint8_t cmdMSP)
         serialize8(masterConfig.mag_hardware);
         break;
 
+    case MSP_MOTOR_PWM:
+        headSerialReply(3); 
+        serialize16(masterConfig.motor_pwm_rate);
+        serialize8(masterConfig.motor_pwm_protocol);
+        break;
+        
     case MSP_MOTOR_PINS:
         // FIXME This is hardcoded and should not be.
         headSerialReply(8);
@@ -996,10 +1081,13 @@ static bool processOutCommand(uint8_t cmdMSP)
         break;
 
     case MSP_FAILSAFE_CONFIG:
-        headSerialReply(4);
+        headSerialReply(8);
         serialize8(masterConfig.failsafeConfig.failsafe_delay);
         serialize8(masterConfig.failsafeConfig.failsafe_off_delay);
         serialize16(masterConfig.failsafeConfig.failsafe_throttle);
+        serialize8(masterConfig.failsafeConfig.failsafe_kill_switch);
+        serialize16(masterConfig.failsafeConfig.failsafe_throttle_low_delay);
+        serialize8(masterConfig.failsafeConfig.failsafe_procedure);
         break;
 
     case MSP_RXFAIL_CONFIG:
@@ -1094,12 +1182,69 @@ static bool processOutCommand(uint8_t cmdMSP)
         break;
 #endif
 
+    case MSP_BLACKBOX_CONFIG:
+        headSerialReply(4);
+
+#ifdef BLACKBOX
+        serialize8(1); //Blackbox supported
+        serialize8(masterConfig.blackbox_device);
+        serialize8(masterConfig.blackbox_rate_num);
+        serialize8(masterConfig.blackbox_rate_denom);
+#else
+        serialize8(0); // Blackbox not supported
+        serialize8(0);
+        serialize8(0);
+        serialize8(0);
+#endif
+        break;
+
+    case MSP_SDCARD_SUMMARY:
+        serializeSDCardSummaryReply();
+        break;
+
+    case MSP_TRANSPONDER_CONFIG:
+#ifdef TRANSPONDER
+        headSerialReply(1 + sizeof(masterConfig.transponderData));
+
+        serialize8(1); //Transponder supported
+
+        for (i = 0; i < sizeof(masterConfig.transponderData); i++) {
+            serialize8(masterConfig.transponderData[i]);
+        }
+#else
+        headSerialReply(1);
+        serialize8(0); // Transponder not supported
+#endif
+        break;
+
     case MSP_BF_BUILD_INFO:
         headSerialReply(11 + 4 + 4);
         for (i = 0; i < 11; i++)
         serialize8(buildDate[i]); // MMM DD YYYY as ascii, MMM = Jan/Feb... etc
         serialize32(0); // future exp
         serialize32(0); // future exp
+        break;
+
+    case MSP_3D:
+        headSerialReply(2 * 4);
+        serialize16(masterConfig.flight3DConfig.deadband3d_low);
+        serialize16(masterConfig.flight3DConfig.deadband3d_high);
+        serialize16(masterConfig.flight3DConfig.neutral3d);
+        serialize16(masterConfig.flight3DConfig.deadband3d_throttle);
+        break;
+
+    case MSP_RC_DEADBAND:
+        headSerialReply(3);
+        serialize8(currentProfile->rcControlsConfig.deadband);
+        serialize8(currentProfile->rcControlsConfig.yaw_deadband);
+        serialize8(currentProfile->rcControlsConfig.alt_hold_deadband);
+        break;
+
+    case MSP_SENSOR_ALIGNMENT:
+        headSerialReply(3);
+        serialize8(masterConfig.sensorAlignmentConfig.gyro_align);
+        serialize8(masterConfig.sensorAlignmentConfig.acc_align);
+        serialize8(masterConfig.sensorAlignmentConfig.mag_align);
         break;
 
     default:
@@ -1157,7 +1302,6 @@ static bool processInCommand(void)
         masterConfig.disarm_kill_switch = read8();
         break;
     case MSP_SET_LOOP_TIME:
-        targetLooptime = read16();
         break;
     case MSP_SET_PID_CONTROLLER:
         currentProfile->pidProfile.pidController = constrain(read8(), 1, 2);  // Temporary configurator compatibility
@@ -1254,6 +1398,30 @@ static bool processInCommand(void)
             currentControlRateProfile->rcExpo8 = read8();
             for (i = 0; i < 3; i++) {
                 rate = read8();
+                currentControlRateProfile->rates[i] = MIN(rate, i == YAW ? CONTROL_RATE_CONFIG_YAW_RATE_MAX : CONTROL_RATE_CONFIG_ROLL_PITCH_RATE_MAX);
+            }
+            rate = read8();
+            currentControlRateProfile->dynThrPID = MIN(rate, CONTROL_RATE_CONFIG_TPA_MAX);
+            currentControlRateProfile->thrMid8 = read8();
+            currentControlRateProfile->thrExpo8 = read8();
+            currentControlRateProfile->tpa_breakpoint = read16();
+            if (currentPort->dataSize >= 11) {
+                currentControlRateProfile->rcYawExpo8 = read8();
+            }
+        } else {
+            headSerialError(0);
+        }
+        break;
+
+
+/*
+    case MSP_SET_RC_TUNING:
+    	break;
+        if (currentPort->dataSize >= 10) {
+            currentControlRateProfile->rcRate8 = read8();
+            currentControlRateProfile->rcExpo8 = read8();
+            for (i = 0; i < 3; i++) {
+                rate = read8();
                 currentControlRateProfile->rates[i] = MIN(rate, i == FD_YAW ? CONTROL_RATE_CONFIG_YAW_RATE_MAX : CONTROL_RATE_CONFIG_ROLL_PITCH_RATE_MAX);
             }
             rate = read8();
@@ -1270,13 +1438,15 @@ static bool processInCommand(void)
                 masterConfig.profile[0].rcControlsConfig.yaw_deadband = read8();
                 currentProfile->pidProfile.gyro_lpf_hz = read8();
     			currentProfile->pidProfile.dterm_lpf_hz = read8();
-    			//currentProfile->pidProfile.yaw_pterm_cut_hz = read8();
+//    			currentProfile->pidProfile.yaw_pterm_cut_hz = read8();
             }
         } else {
             headSerialError(0);
         }
         break;
+*/
     case MSP_SET_MISC:
+    	break;
         tmp = read16();
         if (tmp < 1600 && tmp > 1400)
             masterConfig.rxConfig.midrc = tmp;
@@ -1314,9 +1484,19 @@ static bool processInCommand(void)
             masterConfig.mag_hardware = read8();
         }
         break;
+
+    case MSP_SET_MOTOR_PWM:
+        masterConfig.motor_pwm_rate = read16();
+        masterConfig.motor_pwm_protocol = read8();
+        break;
+        
     case MSP_SET_MOTOR:
-        for (i = 0; i < 8; i++) // FIXME should this use MAX_MOTORS or MAX_SUPPORTED_MOTORS instead of 8
-            motor_disarmed[i] = read16();
+        for (i = 0; i < 8; i++) {
+            const int16_t disarmed = read16();
+            if (i < MAX_SUPPORTED_MOTORS) {
+                motor_disarmed[i] = disarmed;
+            }
+        }
         break;
     case MSP_SET_SERVO_CONFIGURATION:
 #ifdef USE_SERVOS
@@ -1358,20 +1538,46 @@ static bool processInCommand(void)
 #endif
         break;
 
+    case MSP_SET_3D:
+        masterConfig.flight3DConfig.deadband3d_low = read16();
+        masterConfig.flight3DConfig.deadband3d_high = read16();
+        masterConfig.flight3DConfig.neutral3d = read16();
+        masterConfig.flight3DConfig.deadband3d_throttle = read16();
+        break;
+
+    case MSP_SET_RC_DEADBAND:
+        currentProfile->rcControlsConfig.deadband = read8();
+        currentProfile->rcControlsConfig.yaw_deadband = read8();
+        currentProfile->rcControlsConfig.alt_hold_deadband = read8();
+        break;
+
+    case MSP_SET_RESET_CURR_PID:
+        resetPidProfile(&currentProfile->pidProfile);
+        break;    
+
+    case MSP_SET_SENSOR_ALIGNMENT:
+        masterConfig.sensorAlignmentConfig.gyro_align = read8();
+        masterConfig.sensorAlignmentConfig.acc_align = read8();
+        masterConfig.sensorAlignmentConfig.mag_align = read8();
+        break;
+        
     case MSP_RESET_CONF:
         if (!ARMING_FLAG(ARMED)) {
             resetEEPROM();
             readEEPROM();
         }
         break;
+
     case MSP_ACC_CALIBRATION:
         if (!ARMING_FLAG(ARMED))
             accSetCalibrationCycles(CALIBRATING_ACC_CYCLES);
         break;
+
     case MSP_MAG_CALIBRATION:
         if (!ARMING_FLAG(ARMED))
             ENABLE_STATE(CALIBRATE_MAG);
         break;
+
     case MSP_EEPROM_WRITE:
         if (ARMING_FLAG(ARMED)) {
             headSerialError(0);
@@ -1380,6 +1586,32 @@ static bool processInCommand(void)
         writeEEPROM();
         readEEPROM();
         break;
+
+#ifdef BLACKBOX
+    case MSP_SET_BLACKBOX_CONFIG:
+        // Don't allow config to be updated while Blackbox is logging
+        if (blackboxMayEditConfig()) {
+            masterConfig.blackbox_device = read8();
+            masterConfig.blackbox_rate_num = read8();
+            masterConfig.blackbox_rate_denom = read8();
+        }
+        break;
+#endif
+
+#ifdef TRANSPONDER
+    case MSP_SET_TRANSPONDER_CONFIG:
+        if (currentPort->dataSize != sizeof(masterConfig.transponderData)) {
+            headSerialError(0);
+            break;
+        }
+
+        for (i = 0; i < sizeof(masterConfig.transponderData); i++) {
+            masterConfig.transponderData[i] = read8();
+        }
+
+        transponderUpdateData(masterConfig.transponderData);
+        break;
+#endif
 
 #ifdef USE_FLASHFS
     case MSP_DATAFLASH_ERASE:
@@ -1473,19 +1705,18 @@ static bool processInCommand(void)
         masterConfig.failsafeConfig.failsafe_delay = read8();
         masterConfig.failsafeConfig.failsafe_off_delay = read8();
         masterConfig.failsafeConfig.failsafe_throttle = read16();
+        masterConfig.failsafeConfig.failsafe_kill_switch = read8();
+        masterConfig.failsafeConfig.failsafe_throttle_low_delay = read16();
+        masterConfig.failsafeConfig.failsafe_procedure = read8();
         break;
 
     case MSP_SET_RXFAIL_CONFIG:
-        {
-            uint8_t channelCount = currentPort->dataSize / 3;
-            if (channelCount > MAX_SUPPORTED_RC_CHANNEL_COUNT) {
-                headSerialError(0);
-            } else {
-                for (i = 0; i < channelCount; i++) {
-                    masterConfig.rxConfig.failsafe_channel_configurations[i].mode = read8();
-                    masterConfig.rxConfig.failsafe_channel_configurations[i].step = CHANNEL_VALUE_TO_RXFAIL_STEP(read16());
-                }
-            }
+        i = read8();
+        if (i < MAX_SUPPORTED_RC_CHANNEL_COUNT) {
+            masterConfig.rxConfig.failsafe_channel_configurations[i].mode = read8();
+            masterConfig.rxConfig.failsafe_channel_configurations[i].step = CHANNEL_VALUE_TO_RXFAIL_STEP(read16());
+        } else {
+            headSerialError(0);
         }
         break;
 
@@ -1644,7 +1875,7 @@ static bool mspProcessReceivedData(uint8_t c)
     } else if (currentPort->c_state == HEADER_M) {
         currentPort->c_state = (c == '<') ? HEADER_ARROW : IDLE;
     } else if (currentPort->c_state == HEADER_ARROW) {
-	    if (c > MSP_PORT_INBUF_SIZE) {
+        if (c > MSP_PORT_INBUF_SIZE) {
             currentPort->c_state = IDLE;
 
         } else {

@@ -71,7 +71,7 @@
 #include "sensors/sonar.h"
 #include "sensors/initialisation.h"
 
-#ifdef NAZE
+#ifdef USE_HARDWARE_REVISION_DETECTION
 #include "hardware_revision.h"
 #endif
 
@@ -112,6 +112,21 @@ const extiConfig_t *selectMPUIntExtiConfig(void)
 #endif
 #endif
 
+#ifdef ALIENFLIGHTF3
+    // MPU_INT output on V1 PA15
+    static const extiConfig_t alienFlightF3V1MPUIntExtiConfig = {
+            .io = IO_TAG(PA15)
+    };
+    // MPU_INT output on V2 PB13
+    static const extiConfig_t alienFlightF3V2MPUIntExtiConfig = {
+            .io = IO_TAG(PB13)
+    };
+    if (hardwareRevision == AFF3_REV_1) {
+        return &alienFlightF3V1MPUIntExtiConfig;
+    } else {
+        return &alienFlightF3V2MPUIntExtiConfig;
+    }
+#endif
     return NULL;
 }
 
@@ -227,7 +242,7 @@ bool detectGyro(void)
             ; // fallthrough
 
         case GYRO_MPU6500:
-#ifdef USE_GYRO_MPU6500
+#if defined(USE_GYRO_MPU6500) || defined(USE_GYRO_SPI_MPU6500)
 #ifdef USE_GYRO_SPI_MPU6500
             if (mpu6500GyroDetect(&gyro) || mpu6500SpiGyroDetect(&gyro))
 #else
@@ -373,7 +388,7 @@ retry:
 #endif
             ; // fallthrough
         case ACC_MPU6500:
-#ifdef USE_ACC_MPU6500
+#if defined(USE_ACC_MPU6500) || defined(USE_ACC_SPI_MPU6500)
 #ifdef USE_ACC_SPI_MPU6500
             if (mpu6500AccDetect(&acc) || mpu6500SpiAccDetect(&acc))
 #else
@@ -390,7 +405,7 @@ retry:
 
             ; // fallthrough
         case ACC_MPU9250:
-#ifdef USE_ACC_MPU9250
+#ifdef USE_ACC_SPI_MPU9250
             if (mpu9250SpiAccDetect(&acc))
             {
 #ifdef ACC_MPU9250_ALIGN
@@ -534,6 +549,14 @@ static void detectMag(magSensor_e magHardwareToUse)
 
 #endif
 
+#ifdef AQ32_V2
+    static const hmc5883Config_t aq32v2Hmc5883Config = {
+        .io = IO_TAG(PE2)
+    };
+
+    hmc5883Config = &aq32v2Hmc5883Config;
+#endif
+
 retry:
 
     magAlign = ALIGN_DEFAULT;
@@ -661,7 +684,7 @@ bool sensorsAutodetect(sensorAlignmentConfig_t *sensorAlignmentConfig, uint8_t a
     }
 
 #if defined(USE_GYRO_SPI_MPU6500)
-    spiSetDivisor(MPU6500_SPI_INSTANCE, 6);
+    spiSetDivisor(MPU6500_SPI_INSTANCE, 5);
 #endif
 
     return true;

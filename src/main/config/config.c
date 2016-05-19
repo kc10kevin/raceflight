@@ -23,6 +23,8 @@
 
 #include "build_config.h"
 
+#include "blackbox/blackbox_io.h"
+
 #include "common/color.h"
 #include "common/axis.h"
 #include "common/maths.h"
@@ -34,6 +36,7 @@
 #include "drivers/system.h"
 #include "drivers/gpio.h"
 #include "drivers/timer.h"
+#include "drivers/pwm_mapping.h"
 #include "drivers/pwm_rx.h"
 #include "drivers/serial.h"
 #include "drivers/gyro_sync.h"
@@ -73,7 +76,11 @@
 #include "config/config_master.h"
 
 #define BRUSHED_MOTORS_PWM_RATE 16000
-#define BRUSHLESS_MOTORS_PWM_RATE 4000
+#ifdef STM32F4
+#define BRUSHLESS_MOTORS_PWM_RATE 2000
+#else
+#define BRUSHLESS_MOTORS_PWM_RATE 400
+#endif
 
 void useRcControlsConfig(modeActivationCondition_t *modeActivationConditions, escAndServoConfig_t *escAndServoConfigToUse, pidProfile_t *pidProfileToUse);
 
@@ -151,7 +158,7 @@ static uint32_t activeFeaturesLatch = 0;
 static uint8_t currentControlRateProfileIndex = 0;
 controlRateConfig_t *currentControlRateProfile;
 
-static const uint8_t EEPROM_CONF_VERSION = 123;
+static const uint8_t EEPROM_CONF_VERSION = 124;
 
 static void resetAccelerometerTrims(flightDynamicsTrims_t *accelerometerTrims)
 {
@@ -160,7 +167,7 @@ static void resetAccelerometerTrims(flightDynamicsTrims_t *accelerometerTrims)
     accelerometerTrims->values.yaw = 0;
 }
 
-static void resetPidProfile(pidProfile_t *pidProfile)
+void resetPidProfile(pidProfile_t *pidProfile)
 {
 
 #if defined(STM32F411xE) || defined(STM32F40_41xxx)
@@ -199,6 +206,7 @@ static void resetPidProfile(pidProfile_t *pidProfile)
     pidProfile->D8[PIDVEL] = 1;
 
     pidProfile->gyro_lpf_hz = 70;    // filtering ON by default
+#ifdef STM32F4
     pidProfile->dterm_lpf_hz = 70;   // filtering ON by default
     pidProfile->yaw_pterm_cut_hz = 30;
     pidProfile->P_f[ROLL] = 5.000f;     // new PID for raceflight. test carefully
@@ -213,7 +221,22 @@ static void resetPidProfile(pidProfile_t *pidProfile)
     pidProfile->A_level = 3.000f;
     pidProfile->H_level = 3.000f;
     pidProfile->H_sensitivity = 100;
-
+#else
+    pidProfile->dterm_lpf_hz = 40;   // filtering ON by default
+    pidProfile->yaw_pterm_cut_hz = 30;
+    pidProfile->P_f[ROLL] = 1.1f;     // new PID with preliminary defaults test carefully
+    pidProfile->I_f[ROLL] = 0.4f;
+    pidProfile->D_f[ROLL] = 0.01f;
+    pidProfile->P_f[PITCH] = 1.5f;
+    pidProfile->I_f[PITCH] = 0.4f;
+    pidProfile->D_f[PITCH] = 0.01f;
+    pidProfile->P_f[YAW] = 4.0f;
+    pidProfile->I_f[YAW] = 0.4f;
+    pidProfile->D_f[YAW] = 0.00f;
+    pidProfile->A_level = 3.000f;
+    pidProfile->H_level = 3.000f;
+    pidProfile->H_sensitivity = 100;
+#endif
 
 #ifdef GTUNE
     pidProfile->gtune_lolimP[ROLL] = 10;          // [0..200] Lower limit of ROLL P during G tune.
@@ -241,6 +264,7 @@ void resetGpsProfile(gpsProfile_t *gpsProfile)
 }
 #endif
 
+#ifdef BARO
 void resetBarometerConfig(barometerConfig_t *barometerConfig)
 {
     barometerConfig->baro_sample_count = 21;
@@ -248,6 +272,7 @@ void resetBarometerConfig(barometerConfig_t *barometerConfig)
     barometerConfig->baro_cf_vel = 0.985f;
     barometerConfig->baro_cf_alt = 0.965f;
 }
+#endif
 
 void resetSensorAlignment(sensorAlignmentConfig_t *sensorAlignmentConfig)
 {
@@ -272,6 +297,7 @@ void resetFlight3DConfig(flight3DConfig_t *flight3DConfig)
     flight3DConfig->deadband3d_throttle = 50;
 }
 
+#ifdef TELEMETRY
 void resetTelemetryConfig(telemetryConfig_t *telemetryConfig)
 {
     telemetryConfig->telemetry_inversion = 0;
@@ -283,6 +309,7 @@ void resetTelemetryConfig(telemetryConfig_t *telemetryConfig)
     telemetryConfig->frsky_vfas_precision = 0;
     telemetryConfig->hottAlarmSoundInterval = 5;
 }
+#endif
 
 void resetBatteryConfig(batteryConfig_t *batteryConfig)
 {
@@ -321,7 +348,7 @@ void resetSerialConfig(serialConfig_t *serialConfig)
 
     serialConfig->portConfigs[0].functionMask = FUNCTION_MSP;
 
-#ifdef CC3D 
+#if defined(USE_VCP)
     // This allows MSP connection via USART & VCP so the board can be reconfigured.
     serialConfig->portConfigs[1].functionMask = FUNCTION_MSP;
 #endif
@@ -420,8 +447,6 @@ static void resetConf(void)
 #endif
 
     featureSet(FEATURE_FAILSAFE);
-    featureSet(FEATURE_ONESHOT125);
-    featureSet(FEATURE_USE_PWM_RATE);
     featureSet(FEATURE_SBUS_INVERTER);
 
     // global settings
@@ -448,20 +473,22 @@ static void resetConf(void)
 
     resetBatteryConfig(&masterConfig.batteryConfig);
 
+#ifdef TELEMETRY
     resetTelemetryConfig(&masterConfig.telemetryConfig);
+#endif
 
 #ifdef CONFIG_SERIALRX_PROVIDER
-	masterConfig.rxConfig.serialrx_provider = CONFIG_SERIALRX_PROVIDER;
+    masterConfig.rxConfig.serialrx_provider = CONFIG_SERIALRX_PROVIDER;
 #else
-    masterConfig.rxConfig.serialrx_provider = 0;
+    masterConfig.rxConfig.serialrx_provider = SERIALRX_SPEKTRUM1024;
 #endif
 	masterConfig.rf_loop_ctrl = 2;                 // High DLPF, H4
 
 #if defined(CC3D) || defined(MOTOLAB) || defined(LUX_RACE)
-    masterConfig.acc_hardware = 1;     // default/autodetect
+	masterConfig.acc_hardware = ACC_NONE;     // default/autodetect
 #endif
         
-#if defined(STM32F40_41xxx) || defined (STM32F411xE)
+#ifdef STM32F4
     masterConfig.rxConfig.max_aux_channel = 99;
 #elif defined(STM32F303xC)
     masterConfig.rxConfig.max_aux_channel = 6;
@@ -506,12 +533,14 @@ static void resetConf(void)
     resetFlight3DConfig(&masterConfig.flight3DConfig);
 
 #ifdef BRUSHED_MOTORS
+    masterConfig.motor_pwm_protocol = MOTOR_PWM_PROTOCOL_BRUSHED;
     masterConfig.motor_pwm_rate = BRUSHED_MOTORS_PWM_RATE;
 #else
+    masterConfig.motor_pwm_protocol = MOTOR_PWM_PROTOCOL_STD;
     masterConfig.motor_pwm_rate = BRUSHLESS_MOTORS_PWM_RATE;
 #endif
     masterConfig.servo_pwm_rate = 50;
-    masterConfig.use_fast_pwm = 0;
+
 #ifdef CC3D
     masterConfig.use_buzzer_p6 = 0;
 #endif
@@ -544,7 +573,9 @@ static void resetConf(void)
     currentProfile->accDeadband.z = 40;
     currentProfile->acc_unarmedcal = 1;
 
+#ifdef BARO
     resetBarometerConfig(&currentProfile->barometerConfig);
+#endif
 
     // Radio
     parseRcChannels("AETR1234", &masterConfig.rxConfig);
@@ -560,6 +591,7 @@ static void resetConf(void)
     masterConfig.failsafeConfig.failsafe_throttle = 1000;         // default throttle off.
     masterConfig.failsafeConfig.failsafe_kill_switch = 0;         // default failsafe switch action is identical to rc link loss
     masterConfig.failsafeConfig.failsafe_throttle_low_delay = 100; // default throttle low delay for "just disarm" on failsafe condition
+    masterConfig.failsafeConfig.failsafe_procedure = 0;           // default full failsafe procedure is 0: auto-landing
 
 #ifdef USE_SERVOS
     // servos
@@ -595,19 +627,21 @@ static void resetConf(void)
 #ifdef CONFIG_BLACKBOX_DEVICE
 	masterConfig.blackbox_device = CONFIG_BLACKBOX_DEVICE;
 #else
-    masterConfig.blackbox_device = 0;
+    masterConfig.blackbox_device = BLACKBOX_DEVICE_SERIAL;
 #endif
     masterConfig.blackbox_rate_num = 1;
     masterConfig.blackbox_rate_denom = 1;
 #endif
 
-
 #ifdef CONFIG_FEATURE_RX_SERIAL
     featureSet(FEATURE_RX_SERIAL);
 #endif
 #ifdef CONFIG_FEATURE_ONESHOT125
-    featureSet(FEATURE_ONESHOT125);
+    featureSet(FEATURE_ONESHOT);
+    masterConfig.motor_pwm_protocol = MOTOR_PWM_PROTOCOL_125;
+    masterConfig.motor_pwm_rate = BRUSHLESS_MOTORS_PWM_RATE;
 #endif
+
 #ifdef CONFIG_MSP_PORT
     masterConfig.serialConfig.portConfigs[CONFIG_MSP_PORT].functionMask = FUNCTION_MSP; 
     masterConfig.serialConfig.portConfigs[CONFIG_MSP_PORT].msp_baudrateIndex = BAUD_9600;
@@ -667,87 +701,54 @@ static void resetConf(void)
 
     // alternative defaults settings for ALIENFLIGHTF1 and ALIENFLIGHTF3 targets
 #ifdef ALIENFLIGHT
-    featureSet(FEATURE_RX_SERIAL);
     featureSet(FEATURE_MOTOR_STOP);
-    featureClear(FEATURE_ONESHOT125);
-#if defined(ALIENFLIGHTF3) || defined(ALIENFLIGHTF4)
-    masterConfig.serialConfig.portConfigs[1].functionMask = FUNCTION_MSP; //default config USART1 for MSP at 9600 for use with 1wire.
-    masterConfig.serialConfig.portConfigs[1].msp_baudrateIndex = BAUD_9600;
-    masterConfig.serialConfig.portConfigs[2].functionMask = FUNCTION_RX_SERIAL;
-    masterConfig.batteryConfig.vbatscale = 20;
-#else
-    masterConfig.serialConfig.portConfigs[1].functionMask = FUNCTION_RX_SERIAL;
-#endif
-    masterConfig.rxConfig.serialrx_provider = 1;
     masterConfig.rxConfig.spektrum_sat_bind = 5;
     masterConfig.escAndServoConfig.minthrottle = 1000;
     masterConfig.escAndServoConfig.maxthrottle = 2000;
+    masterConfig.motor_pwm_protocol = MOTOR_PWM_PROTOCOL_BRUSHED;
     masterConfig.motor_pwm_rate = 32000;
     currentProfile->pidProfile.pidController = 2;
+#ifdef ALIENFLIGHTF3
+    masterConfig.batteryConfig.vbatscale = 20;
+    masterConfig.mag_hardware = MAG_NONE;            // disabled by default
+    currentProfile->pidProfile.P_f[ROLL] = 1.0f;
+    currentProfile->pidProfile.I_f[ROLL] = 0.4f;
+    currentProfile->pidProfile.D_f[ROLL] = 0.01f;
+    currentProfile->pidProfile.P_f[PITCH] = 1.0f;
+    currentProfile->pidProfile.I_f[PITCH] = 0.4f;
+    currentProfile->pidProfile.D_f[PITCH] = 0.01f;
+    currentProfile->pidProfile.P_f[YAW] = 4.0f;
+    currentProfile->pidProfile.I_f[YAW] = 0.4f;
+    currentProfile->pidProfile.D_f[YAW] = 0.00f;
+#endif
+#ifdef ALIENFLIGHTF4
     currentProfile->pidProfile.P_f[ROLL] = 5.000f;
     currentProfile->pidProfile.I_f[ROLL] = 1.000f;
-    currentProfile->pidProfile.D_f[ROLL] = 0.020f;
+    currentProfile->pidProfile.D_f[ROLL] = 0.080f;
     currentProfile->pidProfile.P_f[PITCH] = 5.000f;
     currentProfile->pidProfile.I_f[PITCH] = 1.000f;
-    currentProfile->pidProfile.D_f[PITCH] = 0.020f;
+    currentProfile->pidProfile.D_f[PITCH] = 0.080f;
     currentProfile->pidProfile.P_f[YAW] = 8.400f;
-    currentProfile->pidProfile.I_f[YAW] = 1.500f;
-    currentProfile->pidProfile.D_f[YAW] = 0.020f;
+    currentProfile->pidProfile.I_f[YAW] = 1.200f;
+    currentProfile->pidProfile.D_f[YAW] = 0.000f;
+#endif
     masterConfig.failsafeConfig.failsafe_delay = 2;
     masterConfig.failsafeConfig.failsafe_off_delay = 0;
+    masterConfig.mixerConfig.yaw_jump_prevention_limit = YAW_JUMP_PREVENTION_LIMIT_HIGH;
     currentControlRateProfile->rcRate8 = 100;
     currentControlRateProfile->rates[FD_PITCH] = 20;
     currentControlRateProfile->rates[FD_ROLL] = 20;
-    currentControlRateProfile->rates[FD_YAW] = 20;
+    currentControlRateProfile->rates[FD_YAW] = 30;
     parseRcChannels("TAER1234", &masterConfig.rxConfig);
 
-    //  { 1.0f, -0.414178f,  1.0f, -1.0f },          // REAR_R
-    masterConfig.customMotorMixer[0].throttle = 1.0f;
-    masterConfig.customMotorMixer[0].roll = -0.414178f;
-    masterConfig.customMotorMixer[0].pitch = 1.0f;
-    masterConfig.customMotorMixer[0].yaw = -1.0f;
-
-    //  { 1.0f, -0.414178f, -1.0f,  1.0f },          // FRONT_R
-    masterConfig.customMotorMixer[1].throttle = 1.0f;
-    masterConfig.customMotorMixer[1].roll = -0.414178f;
-    masterConfig.customMotorMixer[1].pitch = -1.0f;
-    masterConfig.customMotorMixer[1].yaw = 1.0f;
-
-    //  { 1.0f,  0.414178f,  1.0f,  1.0f },          // REAR_L
-    masterConfig.customMotorMixer[2].throttle = 1.0f;
-    masterConfig.customMotorMixer[2].roll = 0.414178f;
-    masterConfig.customMotorMixer[2].pitch = 1.0f;
-    masterConfig.customMotorMixer[2].yaw = 1.0f;
-
-    //  { 1.0f,  0.414178f, -1.0f, -1.0f },          // FRONT_L
-    masterConfig.customMotorMixer[3].throttle = 1.0f;
-    masterConfig.customMotorMixer[3].roll = 0.414178f;
-    masterConfig.customMotorMixer[3].pitch = -1.0f;
-    masterConfig.customMotorMixer[3].yaw = -1.0f;
-
-    //  { 1.0f, -1.0f, -0.414178f, -1.0f },          // MIDFRONT_R
-    masterConfig.customMotorMixer[4].throttle = 1.0f;
-    masterConfig.customMotorMixer[4].roll = -1.0f;
-    masterConfig.customMotorMixer[4].pitch = -0.414178f;
-    masterConfig.customMotorMixer[4].yaw = -1.0f;
-
-    //  { 1.0f,  1.0f, -0.414178f,  1.0f },          // MIDFRONT_L
-    masterConfig.customMotorMixer[5].throttle = 1.0f;
-    masterConfig.customMotorMixer[5].roll = 1.0f;
-    masterConfig.customMotorMixer[5].pitch = -0.414178f;
-    masterConfig.customMotorMixer[5].yaw = 1.0f;
-
-    //  { 1.0f, -1.0f,  0.414178f,  1.0f },          // MIDREAR_R
-    masterConfig.customMotorMixer[6].throttle = 1.0f;
-    masterConfig.customMotorMixer[6].roll = -1.0f;
-    masterConfig.customMotorMixer[6].pitch = 0.414178f;
-    masterConfig.customMotorMixer[6].yaw = 1.0f;
-
-    //  { 1.0f,  1.0f,  0.414178f, -1.0f },          // MIDREAR_L
-    masterConfig.customMotorMixer[7].throttle = 1.0f;
-    masterConfig.customMotorMixer[7].roll = 1.0f;
-    masterConfig.customMotorMixer[7].pitch = 0.414178f;
-    masterConfig.customMotorMixer[7].yaw = -1.0f;
+    masterConfig.customMotorMixer[0] = (motorMixer_t){ 1.0f, -0.414178f,  1.0f, -1.0f };    // REAR_R
+    masterConfig.customMotorMixer[1] = (motorMixer_t){ 1.0f, -0.414178f, -1.0f,  1.0f };    // FRONT_R
+    masterConfig.customMotorMixer[2] = (motorMixer_t){ 1.0f,  0.414178f,  1.0f,  1.0f };    // REAR_L
+    masterConfig.customMotorMixer[3] = (motorMixer_t){ 1.0f,  0.414178f, -1.0f, -1.0f };    // FRONT_L
+    masterConfig.customMotorMixer[4] = (motorMixer_t){ 1.0f, -1.0f, -0.414178f, -1.0f };    // MIDFRONT_R
+    masterConfig.customMotorMixer[5] = (motorMixer_t){ 1.0f,  1.0f, -0.414178f,  1.0f };    // MIDFRONT_L
+    masterConfig.customMotorMixer[6] = (motorMixer_t){ 1.0f, -1.0f,  0.414178f,  1.0f };    // MIDREAR_R
+    masterConfig.customMotorMixer[7] = (motorMixer_t){ 1.0f,  1.0f,  0.414178f, -1.0f };    // MIDREAR_L
 #endif
 
     // copy first profile into remaining profile
@@ -779,6 +780,7 @@ static bool isEEPROMContentValid(void)
 {
     const master_t *temp = (const master_t *) CONFIG_START_FLASH_ADDRESS;
     uint8_t checksum = 0;
+
     // check version number
     if (EEPROM_CONF_VERSION != temp->version)
         return false;
@@ -859,12 +861,14 @@ void activateConfig(void)
         currentProfile->throttle_correction_angle
     );
 
+#if defined(BARO) || defined(SONAR)
     configureAltitudeHold(
         &currentProfile->pidProfile,
         &currentProfile->barometerConfig,
         &currentProfile->rcControlsConfig,
         &masterConfig.escAndServoConfig
     );
+#endif
 
 #ifdef BARO
     useBarometerConfig(&currentProfile->barometerConfig);
@@ -1087,7 +1091,6 @@ void writeEEPROM(void)
 
 void ensureEEPROMContainsValidData(void)
 {
-
     if (isEEPROMContentValid()) {
         return;
     }
@@ -1099,7 +1102,6 @@ void resetEEPROM(void)
 {
     resetConf();
     writeEEPROM();
-
 }
 
 void saveConfigAndNotify(void)
@@ -1131,11 +1133,7 @@ void handleOneshotFeatureChangeOnRestart(void)
     StopPwmAllMotors();
     delay(50);
     // Apply additional delay when OneShot125 feature changed from on to off state
-    if (feature(FEATURE_ONESHOT125) && !featureConfigured(FEATURE_ONESHOT125)) {
-            delay(ONESHOT_FEATURE_CHANGED_DELAY_ON_BOOT_MS);
-    } else if (feature(FEATURE_MULTISHOT) && !featureConfigured(FEATURE_MULTISHOT)) {
-            delay(ONESHOT_FEATURE_CHANGED_DELAY_ON_BOOT_MS);
-    }
+    delay(ONESHOT_FEATURE_CHANGED_DELAY_ON_BOOT_MS);
 }
 
 void latchActiveFeatures()

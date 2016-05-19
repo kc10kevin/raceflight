@@ -40,6 +40,7 @@
 #include "drivers/system.h"
 #include "drivers/serial.h"
 #include "drivers/timer.h"
+#include "drivers/pwm_mapping.h"
 #include "drivers/pwm_rx.h"
 #include "drivers/gyro_sync.h"
 
@@ -64,6 +65,7 @@
 #include "io/serial_cli.h"
 #include "io/serial_msp.h"
 #include "io/statusindicator.h"
+#include "io/asyncfatfs/asyncfatfs.h"
 
 #include "rx/rx.h"
 #include "rx/msp.h"
@@ -394,7 +396,6 @@ void mwArm(void)
         }
         if (!ARMING_FLAG(PREVENT_ARMING)) {
             ENABLE_ARMING_FLAG(ARMED);
-
             headFreeModeHold = DECIDEGREES_TO_DEGREES(attitude.values.yaw);
 
 #ifdef BLACKBOX
@@ -785,6 +786,10 @@ void taskMainPidLoop(void)
     if (motorControlEnable) {
         writeMotors();
     }
+
+#ifdef USE_SDCARD
+        afatfs_poll();
+#endif
 
 #ifdef BLACKBOX
     if (!cliMode && feature(FEATURE_BLACKBOX)) {

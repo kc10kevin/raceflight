@@ -50,6 +50,7 @@
 #include "drivers/inverter.h"
 #include "drivers/flash_m25p16.h"
 #include "drivers/sonar_hcsr04.h"
+#include "drivers/sdcard.h"
 #include "drivers/gyro_sync.h"
 #include "drivers/exti.h"
 #include "drivers/io.h"
@@ -65,6 +66,7 @@
 #include "io/gimbal.h"
 #include "io/ledstrip.h"
 #include "io/display.h"
+#include "io/asyncfatfs/asyncfatfs.h"
 
 #include "sensors/sensors.h"
 #include "sensors/sonar.h"
@@ -186,11 +188,11 @@ void init(void)
 #endif
     //i2cSetOverclock(masterConfig.i2c_overclock);
 
+    systemInit();
+
 #ifdef USE_HARDWARE_REVISION_DETECTION
     detectHardwareRevision();
 #endif
-
-    systemInit();
 
     // Latch active features to be used for feature() in the remainder of init().
     latchActiveFeatures();
@@ -198,7 +200,15 @@ void init(void)
     // initialize IO (needed for all IO operations)
     IOInitGlobal();
 	
-    ledInit();
+#ifdef ALIENFLIGHTF3
+    if (hardwareRevision == AFF3_REV_1) {
+        ledInit(false);
+    } else {
+        ledInit(true);
+    }
+#else
+    ledInit(false);
+#endif
     
 #ifdef USE_EXTI
     EXTIInit();
@@ -283,37 +293,24 @@ void init(void)
     pwm_params.servoPwmRate = masterConfig.servo_pwm_rate;
 #endif
 
-	pwm_params.useOneshot = feature(FEATURE_ONESHOT125);
-	pwm_params.useMultiShot = feature(FEATURE_MULTISHOT);
-	pwm_params.usePwmRate = feature(FEATURE_USE_PWM_RATE);
-    pwm_params.useFastPWM = masterConfig.use_fast_pwm ? true : false;
-    pwm_params.motorPwmRate = masterConfig.motor_pwm_rate;
-    if (feature(FEATURE_3D))
-    {
+	pwm_params.motorPwmProtocol = masterConfig.motor_pwm_protocol;
+	pwm_params.useOneshot = feature(FEATURE_ONESHOT);
+
+	if (feature(FEATURE_ONESHOT)) {
+        pwm_params.motorPwmRate = 0;
+	} else {
+        pwm_params.motorPwmRate = masterConfig.motor_pwm_rate;
+        motorControlEnable = true;
+	}
+    
+    if (!feature(FEATURE_3D))
+        pwm_params.idlePulse = masterConfig.escAndServoConfig.mincommand;
+    else
         pwm_params.idlePulse = masterConfig.flight3DConfig.neutral3d;
-    }
-    else 
-    {
-        if ((pwm_params.motorPwmRate > 500 && !masterConfig.use_fast_pwm) && !feature(FEATURE_USE_PWM_RATE))
-        {
-            pwm_params.idlePulse = 0; // brushed motors
-        }
-        else
-        {
-        	if (feature(FEATURE_USE_PWM_RATE)) {
-        		pwm_params.idlePulse = (uint16_t)((float)(masterConfig.escAndServoConfig.mincommand-1000) / 4.1666f)+60;
-        	} else {
-        		pwm_params.idlePulse = (uint16_t)((float)masterConfig.escAndServoConfig.mincommand*1.5f);
-        	}
-        }
-    }    
 
     pwmOutputConfiguration_t *pwmOutputConfiguration = pwmInit(&pwm_params);
 
     mixerUsePWMOutputConfiguration(pwmOutputConfiguration);
-
-    if (!feature(FEATURE_ONESHOT125) && !feature(FEATURE_MULTISHOT))
-        motorControlEnable = true;
 
     systemState |= SYSTEM_STATE_MOTORS_READY;
 
@@ -358,7 +355,13 @@ void init(void)
 #ifdef USE_SPI
     spiInit(SPIDEV_1);
     spiInit(SPIDEV_2);
+#ifdef ALIENFLIGHTF3
+    if (hardwareRevision == AFF3_REV_2) {
+        spiInit(SPIDEV_3);
+    }
+#else
     spiInit(SPIDEV_3);
+#endif
 #endif
 
 #ifdef USE_HARDWARE_REVISION_DETECTION
@@ -508,6 +511,27 @@ void init(void)
 #endif
 
     flashfsInit();
+#endif
+
+#ifdef USE_SDCARD
+    bool sdcardUseDMA = false;
+
+    sdcardInsertionDetectInit();
+
+#ifdef SDCARD_DMA_CHANNEL_TX
+
+#if defined(LED_STRIP) && defined(WS2811_DMA_CHANNEL)
+    // Ensure the SPI Tx DMA doesn't overlap with the led strip
+    sdcardUseDMA = !feature(FEATURE_LED_STRIP) || SDCARD_DMA_CHANNEL_TX != WS2811_DMA_CHANNEL;
+#else
+    sdcardUseDMA = true;
+#endif
+
+#endif
+
+    sdcard_init(sdcardUseDMA);
+
+    afatfs_init();
 #endif
 
 #ifdef BLACKBOX

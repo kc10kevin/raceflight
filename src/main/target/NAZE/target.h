@@ -151,6 +151,8 @@
 
 #define LED_STRIP
 #define LED_STRIP_TIMER TIM3
+#define WS2811_DMA_TC_FLAG              DMA1_FLAG_TC6
+#define WS2811_DMA_HANDLER_IDENTIFER    DMA1_CH6_HANDLER
 
 #define BLACKBOX
 #define TELEMETRY
@@ -164,20 +166,25 @@
 #define BIND_PORT  GPIOA
 #define BIND_PIN   Pin_3
 
-#define USE_SERIAL_1WIRE
+#define USE_SERIAL_4WAY_BLHELI_INTERFACE
 
-// STM32F103CBT6-LQFP48 Pin30 (PA9) TX - PC3 connects to onboard CP2102 RX
-#define S1W_TX_GPIO         GPIOA
-#define S1W_TX_PIN          GPIO_Pin_9
-// STM32F103CBT6-LQFP48 Pin31 (PA10) RX - PC1 to onboard CP2102 TX
-#define S1W_RX_GPIO         GPIOA
-#define S1W_RX_PIN          GPIO_Pin_10
+#define USE_QUATERNION
 
-// alternative defaults for ALIENFLIGHT F1 target
+// alternative defaults for AlienFlight F1 target
 #ifdef ALIENFLIGHT
 #undef TARGET_BOARD_IDENTIFIER
-#define TARGET_BOARD_IDENTIFIER "AFF1" // ALIENFLIGHTF1.
+#define TARGET_BOARD_IDENTIFIER "AFF1" // ALIENFLIGHT F1.
 #undef BOARD_HAS_VOLTAGE_DIVIDER
+#undef USE_SOFTSERIAL2
+#undef USE_SOFTSERIAL1
+#undef GPS
+#undef BLACKBOX
+#undef TELEMETRY
+
+#define CONFIG_SERIALRX_PROVIDER SERIALRX_SPEKTRUM2048
+#define CONFIG_FEATURE_RX_SERIAL
+#define CONFIG_RX_SERIAL_PORT 1
+
 #define HARDWARE_BIND_PLUG
 
 // Hardware bind plug at PB5 (Pin 41)
