@@ -47,7 +47,7 @@ F405_TARGETS     = REVO REVO_OPBL SPARKY2 SPARKY2_OPBL ALIENFLIGHTF4 BLUEJAYF4 V
 F405_TARGETS_16  = QUANTON QUANTON_OPBL
 F411_TARGETS     = REVONANO REVONANO_OPBL
 
-SDCARD_TARGETS   = ALIENFLIGHTF4 BLUEJAYF4 SPRACINGF3MINI AQ32_V2
+SDCARD_TARGETS   = ALIENFLIGHTF4 BLUEJAYF4 SPRACINGF3MINI AQ32_V2 KKNGF4
 
 VALID_TARGETS	 = $(F1_TARGETS) $(CC3D_TARGETS) $(F3_TARGETS) $(F4_TARGETS)
 
@@ -688,6 +688,10 @@ KKNGF4_SRC = \
 		   drivers/barometer_ms5611.c \
 		   drivers/light_ws2811strip.c \
 		   drivers/light_ws2811strip_stm32f4xx.c \
+		   drivers/sdcard.c \
+		   drivers/sdcard_standard.c \
+		   io/asyncfatfs/asyncfatfs.c \
+		   io/asyncfatfs/fat_standard.c \
 		   $(HIGHEND_SRC) \
 		   $(COMMON_SRC) \
 		   $(VCPF4_SRC)
