@@ -79,10 +79,10 @@
 #define SDCARD_DMA_CLK                      RCC_AHB1Periph_DMA1
 #define SDCARD_DMA_CHANNEL                  DMA_Channel_0
 
-#define USE_FLASHFS
-#define USE_FLASH_M25P16
-#define M25P16_CS_PIN         PB3
-#define M25P16_SPI_INSTANCE   SPI3
+//#define USE_FLASHFS
+//#define USE_FLASH_M25P16
+//#define M25P16_CS_PIN         PB3
+//#define M25P16_SPI_INSTANCE   SPI3
 
 #define USABLE_TIMER_CHANNEL_COUNT 5  //  chane to 6
 
